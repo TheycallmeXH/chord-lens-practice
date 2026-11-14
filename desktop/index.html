@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'none'">
+  <title>和弦镜 · 练琴</title>
+  <link rel="icon" href="icons/app.ico">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="titlebar">
+    <div class="brand"><img class="brand-icon" src="icons/app.svg" alt="">和弦镜 <span>练琴</span></div>
+    <div class="title-tools">
+      <button id="resetLayoutButton" class="icon" title="恢复布局" aria-label="恢复布局"><i data-lucide="panels-top-left"></i></button>
+      <button id="exitCompactButton" class="icon" title="返回完整界面" aria-label="返回完整界面" hidden><i data-lucide="maximize-2"></i></button>
+      <button id="pinButton" class="icon" title="窗口置顶" aria-label="窗口置顶" aria-pressed="false"><i data-lucide="pin"></i></button>
+      <button id="helpButton" class="icon" title="练习与识别规则" aria-label="练习与识别规则"><i data-lucide="circle-help"></i></button>
+      <button id="settingsButton" class="icon" title="设置" aria-label="设置"><i data-lucide="sliders-horizontal"></i></button>
+    </div>
+  </header>
+  <div class="transport">
+    <div class="midi-controls"><span id="midiDot" class="dot"></span><span id="midiStatus">MIDI</span><select id="deviceSelect" aria-label="MIDI 输入设备"><option value="all">所有输入</option></select><button id="connectButton" class="icon" title="刷新 MIDI" aria-label="刷新 MIDI"><i data-lucide="refresh-cw"></i></button></div>
+    <div class="metronome-controls">
+      <button id="metroButton" class="icon" title="节拍器" aria-label="节拍器" aria-pressed="false"><i data-lucide="timer"></i></button>
+      <input id="bpmInput" type="number" value="80" min="40" max="240" aria-label="每分钟拍数"><span class="muted">BPM</span>
+      <select id="meterSelect" aria-label="每小节拍数"><option value="4">4/4</option><option value="3">3/4</option><option value="2">2/4</option><option value="6">6/4</option></select>
+      <div id="beatLights" class="beat-lights" aria-label="节拍指示"></div>
+    </div>
+    <div class="output-controls"><span id="pedalStatus" title="踏板状态">延音 −</span><button id="soundButton" class="icon" title="开启声音" aria-label="开启声音" aria-pressed="false"><i data-lucide="volume-x"></i></button></div>
+  </div>
+  <div class="shell">
+    <button id="leftPanelButton" class="edge-toggle left" title="隐藏左侧栏" aria-label="隐藏左侧栏" aria-expanded="true" aria-controls="practiceSidebar"><i data-lucide="chevron-left"></i></button>
+    <button id="rightPanelButton" class="edge-toggle right" title="隐藏右侧栏" aria-label="隐藏右侧栏" aria-expanded="true" aria-controls="practiceInspector"><i data-lucide="chevron-right"></i></button>
+    <aside id="practiceSidebar" class="sidebar">
+      <nav aria-label="练习模式">
+        <button data-mode="free"><i data-lucide="audio-lines"></i>自由分析</button>
+        <button data-mode="chords" aria-pressed="true"><i data-lucide="piano"></i>和弦练习</button>
+        <button data-mode="progression"><i data-lucide="list-music"></i>和弦进行</button>
+        <button id="compactModeButton" aria-pressed="false"><i data-lucide="minimize-2"></i>极简模式</button>
+      </nav>
+      <section class="practice-config" data-panel="config" data-panel-name="练习设置">
+        <div class="panel-heading"><h2>练习设置</h2></div>
+        <div class="config-body" data-panel-body>
+        <label>内容<select id="planSelect"><option value="triads">大小三和弦</option><option value="sevenths">七和弦</option><option value="inversions">三和弦转位</option></select></label>
+        <label id="progressionField" hidden>进行<select id="progressionSelect"><option value="ii-V-I">ii7 – V7 – Imaj7</option><option value="I-vi-IV-V">I – vi – IV – V7</option></select></label>
+        <label>调<select id="keySelect"></select></label>
+        <label>判定<select id="ruleSelect"><option value="pitch">任意八度</option><option value="exact">指定音区</option></select></label>
+        <label>每轮<select id="countSelect"><option value="12">12 题</option><option value="24">24 题</option><option value="48">48 题</option></select></label>
+        <label class="check"><span>琴键提示</span><input id="hintsToggle" type="checkbox" checked></label>
+        <label class="check"><span>保持选音</span><input id="latchToggle" type="checkbox" checked></label>
+        </div>
+      </section>
+      <section class="daily" data-panel="daily" data-panel-name="今日练习"><div class="panel-heading"><h2>今日练习</h2></div><div class="daily-body" data-panel-body><strong id="todayTime">00:00</strong><div><span id="todayRounds">0 轮</span><span id="todayCorrect">0 次成功</span></div></div></section>
+      <button id="recordsButton" class="records-link"><i data-lucide="chart-no-axes-combined"></i>练习记录<span id="recordCount">0</span></button>
+    </aside>
+    <main class="workspace">
+      <section class="performance">
+        <div class="target-panel" data-panel="target" data-panel-name="目标和弦">
+          <div class="panel-heading"><h1 id="modeHeading">和弦练习</h1><div class="target-tools"><span id="targetIndex">1 / 12</span><button id="previewButton" class="icon" title="试听目标和弦" aria-label="试听目标和弦" disabled><i data-lucide="headphones"></i></button></div></div>
+          <div data-panel-body>
+          <div id="targetSymbol" class="large-symbol">C</div>
+          <div id="targetDescription" class="description">大三和弦</div>
+          <div id="targetNotes" class="note-strip"></div>
+          <div class="target-feedback"><span id="practiceState">准备</span><span id="feedbackText"></span></div>
+          <div class="hold-track"><div id="holdProgress"></div></div>
+          </div>
+        </div>
+        <div class="played-panel" data-panel="played" data-panel-name="当前弹奏">
+          <div class="panel-heading"><h2>当前弹奏</h2><span id="matchType"></span></div>
+          <div data-panel-body>
+          <div id="playedSymbol" class="large-symbol">—</div>
+          <div id="playedDescription" class="description"></div>
+          <div class="facts"><div><span>低音</span><strong id="bassText">—</strong></div><div><span>结构</span><strong id="formulaText">—</strong></div></div>
+          <div id="moodText" class="mood"></div>
+          </div>
+        </div>
+      </section>
+      <section class="sequence-band" data-panel="sequence" data-panel-name="和弦序列"><div class="panel-heading"><span id="sequenceLabel">本轮</span></div><div id="sequenceList" class="sequence-list" data-panel-body></div></section>
+      <section class="keyboard-section" data-panel="keyboard" data-panel-name="键盘">
+        <div class="panel-heading keyboard-heading">
+          <div class="keyboard-title"><h2>键盘</h2><span id="keyRange" class="muted"></span><div class="segmented" aria-label="音程关系"><button data-interval="adjacent" aria-pressed="true" title="相邻实际音之间的音程">相邻</button><button data-interval="bass" aria-pressed="false" title="实际最低音到各音的音程">低音</button></div></div>
+          <div><button id="octaveDown" class="icon" title="低一个八度" aria-label="低一个八度"><i data-lucide="chevron-left"></i></button><button id="octaveUp" class="icon" title="高一个八度" aria-label="高一个八度"><i data-lucide="chevron-right"></i></button><button id="clearButton" class="icon" title="清音 · Escape" aria-label="清音"><i data-lucide="rotate-ccw"></i></button></div>
+        </div>
+        <div id="pianoScroll" class="piano-scroll" data-panel-body><div id="pianoRoll" class="piano-roll"><div id="intervals" class="interval-ruler" aria-label="音程关系"></div><div id="piano" class="piano" role="group" aria-label="虚拟钢琴"></div></div></div>
+        <div class="key-legend" data-panel-body><span><i class="target-color"></i>目标</span><span><i class="held-color"></i>按住</span><span><i class="error-color"></i>错音</span><span id="activeNames"></span></div>
+      </section>
+      <section class="session-bar">
+        <div class="session-controls"><button id="startButton" class="start"><i data-lucide="play"></i><span>开始练习</span></button><button id="stopButton" class="icon" title="结束并保存" aria-label="结束并保存" disabled><i data-lucide="square"></i></button><button id="skipButton" class="icon" title="跳过本题" aria-label="跳过本题" disabled><i data-lucide="skip-forward"></i></button></div>
+        <div class="session-metric"><span>完成</span><strong id="completedText">0 / 12</strong></div>
+        <div class="session-metric"><span>连续成功</span><strong id="streakText">0</strong></div>
+        <div class="session-metric" title="成功次数 ÷ 全部尝试，错误在松键时结算"><span>准确率</span><strong id="accuracyText">—</strong></div>
+        <div class="session-metric"><span>本轮用时</span><strong id="sessionTime">00:00</strong></div>
+      </section>
+    </main>
+    <aside id="practiceInspector" class="inspector">
+      <section class="fifths-panel" data-panel="fifths" data-panel-name="五度圈">
+        <div class="panel-heading"><h2>五度圈</h2><button id="applyFifthsButton" class="icon" title="将所选大调用于练习" aria-label="将所选大调用于练习"><i data-lucide="corner-down-left"></i></button></div>
+        <div class="fifths-body" data-panel-body>
+          <div id="fifthsDiagram" class="fifths-diagram" role="group" aria-label="五度圈，外圈大调，内圈关系小调"></div>
+          <div class="fifths-legend"><span><i class="target-color"></i>目标根音</span><span><i class="held-color"></i>当前根音</span><span class="muted" title="外圈大调，内圈关系小调">大调 / 小调</span></div>
+        </div>
+      </section>
+      <section class="notes-panel" data-panel="notes" data-panel-name="组成音"><div class="panel-heading"><h2>组成音</h2><span id="noteCount">0</span></div><div class="note-scroll" data-panel-body><table><thead><tr><th>音符</th><th>级数</th><th>力度</th></tr></thead><tbody id="noteRows"></tbody></table></div><div class="live-metrics" data-panel-body><span>落键差 <strong id="onsetSpread">—</strong></span><span>力度差 <strong id="velocitySpread">—</strong></span></div></section>
+      <section class="attempt-panel" data-panel="attempts" data-panel-name="本轮记录"><div class="panel-heading"><h2>本轮记录</h2><span id="attemptCount">0</span></div><div id="attemptList" class="attempt-list" data-panel-body></div></section>
+      <section class="next-panel" data-panel="next" data-panel-name="下一和弦"><div class="panel-heading"><h2>下一和弦</h2></div><div class="next-body" data-panel-body><strong id="nextSymbol">—</strong><span id="nextDescription"></span></div></section>
+    </aside>
+  </div>
+  <main id="compactView" class="compact-view" aria-label="极简模式" hidden>
+    <div class="compact-chord"><div id="compactSymbol">—</div><div id="compactDescription"></div></div>
+    <div id="compactNotes" class="compact-notes" aria-label="组成音">—</div>
+    <div class="compact-footer">
+      <div class="compact-bass"><span>低音</span><strong id="compactBass">—</strong></div>
+      <div id="compactMidi" class="compact-midi"><span id="compactMidiDot" class="dot"></span><span id="compactMidiStatus">MIDI</span></div>
+    </div>
+  </main>
+  <div id="toast" role="status"></div>
+  <dialog id="settingsDialog">
+    <div class="dialog-heading"><h2>设置</h2><button class="icon" data-close aria-label="关闭"><i data-lucide="x"></i></button></div>
+    <label>MIDI 通道<select id="channelSelect"><option value="all">全部通道</option></select></label>
+    <label class="check"><span>排除鼓通道 10</span><input id="drumsToggle" type="checkbox" checked></label>
+    <label class="check"><span>计入踏板延音</span><input id="pedalToggle" type="checkbox" checked></label>
+    <label class="check"><span>MIDI 试听</span><input id="monitorToggle" type="checkbox"></label>
+    <label>正确保持<input id="holdInput" type="number" value="350" min="100" max="2000" step="50" aria-label="正确保持毫秒"><span class="muted">ms</span></label>
+    <label>参考音 A4<input id="tuningInput" type="number" value="440" min="400" max="480" aria-label="参考音赫兹"><span class="muted">Hz</span></label>
+  </dialog>
+  <dialog id="recordsDialog" class="records-dialog">
+    <div class="dialog-heading"><h2>练习记录</h2><div><button id="exportButton" class="icon" title="导出记录" aria-label="导出记录"><i data-lucide="download"></i></button><button class="icon" data-close aria-label="关闭"><i data-lucide="x"></i></button></div></div>
+    <div id="savedSessions" class="saved-sessions"></div>
+  </dialog>
+  <dialog id="helpDialog">
+    <div class="dialog-heading"><h2>练琴</h2><button class="icon" data-close aria-label="关闭"><i data-lucide="x"></i></button></div>
+    <p>接入 MIDI 键盘后自动接收。保持正确音集，再全部松键进入下一题；踏板音计入时也需释放踏板。部分音先落下可继续补齐，错误仅在松键时计一次。</p>
+    <p>“任意八度”允许八度重复；转位练习同时要求正确低音。“指定音区”按目标实际音高严格匹配。</p>
+    <p>空间键开始 / 暂停；Escape 清音。A W S E D F T G Y H U J K 对应 C4–C5。点击琴键也可练习。</p>
+    <p>声音每次启动默认关闭；节拍器可无声闪拍。开启声音后，MIDI 试听仍由设置单独控制。</p>
+    <p>落键差是当前按住音符的首次触发时间差，力度差是其最大 / 最小 MIDI 力度差。它们不等于节奏评分。</p>
+    <p>和弦识别采用 Tonal 字典及既有和弦镜引擎。情绪只作定性听感参考；没有调性上下文时，候选名称可能存在歧义。练习判定直接比较音高，不受候选命名影响。</p>
+    <p class="muted">记录仅保存在本机，保留最近 100 轮。字体：Jost / 本机 Ableton Sans；中文按字体覆盖范围回退。</p>
+  </dialog>
+  <script src="../midi-chords/vendor/tonal.min.js"></script>
+  <script src="../assets/lucide.min.js"></script>
+  <script src="../midi-chords/engine.js"></script>
+  <script src="practice.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>
