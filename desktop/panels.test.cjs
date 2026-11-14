@@ -7,7 +7,7 @@ const { mkdir } = require('node:fs/promises');
 async function checkPanels(page, resize, label) {
   const errors = [];
   page.on('pageerror',error => errors.push(error.message));
-  await page.waitForSelector('#modeHeading');
+  await page.waitForSelector('#modeHeading',{state:'attached'});
   await page.evaluate(() => localStorage.clear());
   await page.context().addInitScript(() => {
     const port = {id:'panels-test',name:'Panels Test MIDI',state:'connected',async open() {return this;}};
@@ -88,7 +88,9 @@ async function checkPanels(page, resize, label) {
   await page.locator('#stopButton').click();
   await page.locator('#resetLayoutButton').click();
   const names = await page.locator('[data-panel]').evaluateAll(elements => elements.map(el=>el.dataset.panel));
-  for (const name of names) {await fold(name,true);await fold(name,false);}
+  for (const name of names) {
+    if (await page.locator(`[data-panel="${name}"]`).isVisible()) {await fold(name,true);await fold(name,false);}
+  }
   await page.locator('[data-collapse="fifths"]').focus();
   await page.keyboard.press('Space');
   assert.equal(await page.locator('[data-collapse="fifths"]').getAttribute('aria-expanded'),'false');
@@ -127,7 +129,7 @@ async function checkPanels(page, resize, label) {
     assert.ok((await page.locator('.workspace').boundingBox()).width > before.width + 300);
     assert.deepEqual(await geometry(),[]);
     await page.locator('#resetLayoutButton').click();
-    for (const name of ['played','sequence','keyboard','notes','attempts','next','daily','config']) await fold(name,true);
+    for (const name of ['played','sequence','keyboard','notes','config']) await fold(name,true);
     assert.deepEqual(await geometry(),[],'only fifths expanded '+size);
     if (size[0]===1120) await page.screenshot({path:join(__dirname,`test-results/${label}-folded.png`),scale:'css'});
     await page.locator('#resetLayoutButton').click();

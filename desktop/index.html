@@ -6,6 +6,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'none'">
   <title>和弦镜 · 练琴</title>
   <link rel="icon" href="icons/app.ico">
+  <script src="themes.js"></script>
+  <link rel="stylesheet" href="themes.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -40,23 +42,23 @@
         <button id="compactModeButton" aria-pressed="false"><i data-lucide="minimize-2"></i>极简模式</button>
       </nav>
       <section class="practice-config" data-panel="config" data-panel-name="练习设置">
-        <div class="panel-heading"><h2>练习设置</h2></div>
+        <div class="panel-heading"><h2 id="configHeading">练习设置</h2></div>
         <div class="config-body" data-panel-body>
-        <label>内容<select id="planSelect"><option value="triads">大小三和弦</option><option value="sevenths">七和弦</option><option value="inversions">三和弦转位</option></select></label>
-        <label id="progressionField" hidden>进行<select id="progressionSelect"><option value="ii-V-I">ii7 – V7 – Imaj7</option><option value="I-vi-IV-V">I – vi – IV – V7</option></select></label>
-        <label>调<select id="keySelect"></select></label>
-        <label>判定<select id="ruleSelect"><option value="pitch">任意八度</option><option value="exact">指定音区</option></select></label>
-        <label>每轮<select id="countSelect"><option value="12">12 题</option><option value="24">24 题</option><option value="48">48 题</option></select></label>
-        <label class="check"><span>琴键提示</span><input id="hintsToggle" type="checkbox" checked></label>
+        <label data-modes="chords">内容<select id="planSelect"><option value="triads">大小三和弦</option><option value="sevenths">七和弦</option><option value="inversions">三和弦转位</option></select></label>
+        <label id="progressionField" data-modes="progression" hidden>进行<select id="progressionSelect"><option value="ii-V-I">ii7 – V7 – Imaj7</option><option value="I-vi-IV-V">I – vi – IV – V7</option></select></label>
+        <label data-modes="chords progression">调<select id="keySelect"></select></label>
+        <label data-modes="chords progression">判定<select id="ruleSelect"><option value="pitch">任意八度</option><option value="exact">指定音区</option></select></label>
+        <label data-modes="chords progression">每轮<select id="countSelect"><option value="12">12 题</option><option value="24">24 题</option><option value="48">48 题</option></select></label>
+        <label class="check" data-modes="chords progression"><span>琴键提示</span><input id="hintsToggle" type="checkbox" checked></label>
         <label class="check"><span>保持选音</span><input id="latchToggle" type="checkbox" checked></label>
         </div>
       </section>
-      <section class="daily" data-panel="daily" data-panel-name="今日练习"><div class="panel-heading"><h2>今日练习</h2></div><div class="daily-body" data-panel-body><strong id="todayTime">00:00</strong><div><span id="todayRounds">0 轮</span><span id="todayCorrect">0 次成功</span></div></div></section>
-      <button id="recordsButton" class="records-link"><i data-lucide="chart-no-axes-combined"></i>练习记录<span id="recordCount">0</span></button>
+      <section class="daily" data-modes="chords progression" data-panel="daily" data-panel-name="今日练习"><div class="panel-heading"><h2>今日练习</h2></div><div class="daily-body" data-panel-body><strong id="todayTime">00:00</strong><div><span id="todayRounds">0 轮</span><span id="todayCorrect">0 次成功</span></div></div></section>
+      <button id="recordsButton" class="records-link" data-modes="chords progression"><i data-lucide="chart-no-axes-combined"></i>练习记录<span id="recordCount">0</span></button>
     </aside>
     <main class="workspace">
       <section class="performance">
-        <div class="target-panel" data-panel="target" data-panel-name="目标和弦">
+        <div class="target-panel" data-modes="chords progression" data-panel="target" data-panel-name="目标和弦">
           <div class="panel-heading"><h1 id="modeHeading">和弦练习</h1><div class="target-tools"><span id="targetIndex">1 / 12</span><button id="previewButton" class="icon" title="试听目标和弦" aria-label="试听目标和弦" disabled><i data-lucide="headphones"></i></button></div></div>
           <div data-panel-body>
           <div id="targetSymbol" class="large-symbol">C</div>
@@ -83,9 +85,9 @@
           <div><button id="octaveDown" class="icon" title="低一个八度" aria-label="低一个八度"><i data-lucide="chevron-left"></i></button><button id="octaveUp" class="icon" title="高一个八度" aria-label="高一个八度"><i data-lucide="chevron-right"></i></button><button id="clearButton" class="icon" title="清音 · Escape" aria-label="清音"><i data-lucide="rotate-ccw"></i></button></div>
         </div>
         <div id="pianoScroll" class="piano-scroll" data-panel-body><div id="pianoRoll" class="piano-roll"><div id="intervals" class="interval-ruler" aria-label="音程关系"></div><div id="piano" class="piano" role="group" aria-label="虚拟钢琴"></div></div></div>
-        <div class="key-legend" data-panel-body><span><i class="target-color"></i>目标</span><span><i class="held-color"></i>按住</span><span><i class="error-color"></i>错音</span><span id="activeNames"></span></div>
+        <div class="key-legend" data-panel-body><span data-modes="chords progression"><i class="target-color"></i>目标</span><span><i class="held-color"></i>按住</span><span data-modes="chords progression"><i class="error-color"></i>错音</span><span id="activeNames"></span></div>
       </section>
-      <section class="session-bar">
+      <section class="session-bar" data-modes="chords progression">
         <div class="session-controls"><button id="startButton" class="start"><i data-lucide="play"></i><span>开始练习</span></button><button id="stopButton" class="icon" title="结束并保存" aria-label="结束并保存" disabled><i data-lucide="square"></i></button><button id="skipButton" class="icon" title="跳过本题" aria-label="跳过本题" disabled><i data-lucide="skip-forward"></i></button></div>
         <div class="session-metric"><span>完成</span><strong id="completedText">0 / 12</strong></div>
         <div class="session-metric"><span>连续成功</span><strong id="streakText">0</strong></div>
@@ -98,12 +100,12 @@
         <div class="panel-heading"><h2>五度圈</h2><button id="applyFifthsButton" class="icon" title="将所选大调用于练习" aria-label="将所选大调用于练习"><i data-lucide="corner-down-left"></i></button></div>
         <div class="fifths-body" data-panel-body>
           <div id="fifthsDiagram" class="fifths-diagram" role="group" aria-label="五度圈，外圈大调，内圈关系小调"></div>
-          <div class="fifths-legend"><span><i class="target-color"></i>目标根音</span><span><i class="held-color"></i>当前根音</span><span class="muted" title="外圈大调，内圈关系小调">大调 / 小调</span></div>
+          <div class="fifths-legend"><span data-modes="chords progression"><i class="target-color"></i>目标根音</span><span><i class="held-color"></i>当前根音</span><span class="muted" title="外圈大调，内圈关系小调">大调 / 小调</span></div>
         </div>
       </section>
       <section class="notes-panel" data-panel="notes" data-panel-name="组成音"><div class="panel-heading"><h2>组成音</h2><span id="noteCount">0</span></div><div class="note-scroll" data-panel-body><table><thead><tr><th>音符</th><th>级数</th><th>力度</th></tr></thead><tbody id="noteRows"></tbody></table></div><div class="live-metrics" data-panel-body><span>落键差 <strong id="onsetSpread">—</strong></span><span>力度差 <strong id="velocitySpread">—</strong></span></div></section>
-      <section class="attempt-panel" data-panel="attempts" data-panel-name="本轮记录"><div class="panel-heading"><h2>本轮记录</h2><span id="attemptCount">0</span></div><div id="attemptList" class="attempt-list" data-panel-body></div></section>
-      <section class="next-panel" data-panel="next" data-panel-name="下一和弦"><div class="panel-heading"><h2>下一和弦</h2></div><div class="next-body" data-panel-body><strong id="nextSymbol">—</strong><span id="nextDescription"></span></div></section>
+      <section class="attempt-panel" data-modes="chords progression" data-panel="attempts" data-panel-name="本轮记录"><div class="panel-heading"><h2>本轮记录</h2><span id="attemptCount">0</span></div><div id="attemptList" class="attempt-list" data-panel-body></div></section>
+      <section class="next-panel" data-modes="chords progression" data-panel="next" data-panel-name="下一和弦"><div class="panel-heading"><h2>下一和弦</h2></div><div class="next-body" data-panel-body><strong id="nextSymbol">—</strong><span id="nextDescription"></span></div></section>
     </aside>
   </div>
   <main id="compactView" class="compact-view" aria-label="极简模式" hidden>
@@ -117,11 +119,12 @@
   <div id="toast" role="status"></div>
   <dialog id="settingsDialog">
     <div class="dialog-heading"><h2>设置</h2><button class="icon" data-close aria-label="关闭"><i data-lucide="x"></i></button></div>
+    <fieldset class="theme-picker"><legend>配色</legend><div id="themeOptions" class="theme-options" role="group" aria-label="配色方案"></div></fieldset>
     <label>MIDI 通道<select id="channelSelect"><option value="all">全部通道</option></select></label>
     <label class="check"><span>排除鼓通道 10</span><input id="drumsToggle" type="checkbox" checked></label>
     <label class="check"><span>计入踏板延音</span><input id="pedalToggle" type="checkbox" checked></label>
     <label class="check"><span>MIDI 试听</span><input id="monitorToggle" type="checkbox"></label>
-    <label>正确保持<input id="holdInput" type="number" value="350" min="100" max="2000" step="50" aria-label="正确保持毫秒"><span class="muted">ms</span></label>
+    <label data-modes="chords progression">正确保持<input id="holdInput" type="number" value="350" min="100" max="2000" step="50" aria-label="正确保持毫秒"><span class="muted">ms</span></label>
     <label>参考音 A4<input id="tuningInput" type="number" value="440" min="400" max="480" aria-label="参考音赫兹"><span class="muted">Hz</span></label>
   </dialog>
   <dialog id="recordsDialog" class="records-dialog">

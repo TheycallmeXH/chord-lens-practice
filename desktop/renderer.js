@@ -23,6 +23,7 @@
   let firstAnalysisAt = 0, bpm = 80, beats = 4, metro = false, beatStart = 0, nextBeat = 0, lastVisualBeat = -1;
   let sound = false, audio, master, tuning = 440, audioGeneration = 0;
   let compact = false, switchingView = false;
+  let theme = PracticeThemes.find(document.documentElement.dataset.theme) || PracticeThemes.choices[0];
   let tickTimer = null, feedbackKey = '', analysisKey = '', noteStateKey = '';
   const voices = new Map(), previewVoices = new Set(), metroVoices = new Set(), onsets = new Map(), computerDown = new Set(), pointers = new Map(), ports = new Map(), failedPorts = new Set();
   const portAttempts = new Map();
@@ -53,11 +54,26 @@
       mode, plan:$('#planSelect').value, key:$('#keySelect').value,
       rule:$('#ruleSelect').value, count:Number($('#countSelect').value),
       progression:$('#progressionSelect').value, bpm, beats,
-      hints:$('#hintsToggle').checked, holdMs:Number($('#holdInput').value)
+      hints:$('#hintsToggle').checked, holdMs:Number($('#holdInput').value), theme:theme.id
     };
   }
   function persistConfig() { saved.config = config(); saveStorage(); }
   function persistLayout() { saved.layout = layout; saveStorage(); }
+  function applyTheme(id, persist = true) {
+    theme = PracticeThemes.apply(id);
+    $$('[data-theme-value]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.themeValue === theme.id)));
+    window.practiceDesktop?.theme(theme.id).catch(error => toast(error.message));
+    if (persist) persistConfig();
+  }
+  function setupThemes() {
+    $('#themeOptions').innerHTML = PracticeThemes.choices.map(item =>
+      `<button type="button" class="theme-option" data-theme-value="${item.id}" aria-pressed="false" title="${escape(item.label)}"><span class="theme-swatches" aria-hidden="true">${item.swatches.map(color => `<i style="background:${color}"></i>`).join('')}</span>${escape(item.label)}<i class="theme-check" data-lucide="check" aria-hidden="true"></i></button>`).join('');
+    $('#themeOptions').onclick = event => {
+      const button = event.target.closest('[data-theme-value]');
+      if (button) applyTheme(button.dataset.themeValue);
+    };
+    applyTheme(theme.id,false);
+  }
   function setupPanels() {
     const restored = saved.layout;
     layout.leftHidden = restored.leftHidden === true; layout.rightHidden = restored.rightHidden === true;
@@ -129,7 +145,7 @@
       const [x,y] = point(105,index * 30);
       tones += `<circle class="fifths-tone" data-fifths-tone="${Tonal.Note.chroma(key.tonic)}" cx="${x}" cy="${y}" r="1.8"/>`;
     });
-    $('#fifthsDiagram').innerHTML = `<svg viewBox="0 0 220 220" aria-hidden="true">${paths}${tones}<circle cx="110" cy="110" r="51" fill="#292929" stroke="#43433f"/></svg>${buttons}<div class="fifths-center"><strong id="fifthsPair"></strong><span id="fifthsSignature"></span></div>`;
+    $('#fifthsDiagram').innerHTML = `<svg viewBox="0 0 220 220" aria-hidden="true">${paths}${tones}<circle class="fifths-disc" cx="110" cy="110" r="51"/></svg>${buttons}<div class="fifths-center"><strong id="fifthsPair"></strong><span id="fifthsSignature"></span></div>`;
     $('#fifthsDiagram').onclick = event => {
       const button = event.target.closest('[data-fifths-index]');
       if (!button) return;
@@ -162,6 +178,7 @@
     $('#fifthsPair').textContent = `${pretty(selected.tonic)} / ${pretty(selected.minorRelative)}m`;
     $('#fifthsSignature').textContent = selected.alteration ? `${Math.abs(selected.alteration)} ${selected.alteration > 0 ? '♯' : '♭'}` : '无升降号';
     $('#applyFifthsButton').disabled = busy() || mode === 'free';
+    $('#applyFifthsButton').hidden = busy() || mode === 'free';
   }
   function busy() { return run && ['running', 'paused'].includes(run.state); }
   async function setCompact(value) {
@@ -190,13 +207,14 @@
     if (busy()) return;
     mode = value; run = null;
     document.body.classList.toggle('free-mode', mode === 'free');
-    $('[data-panel="target"]').hidden = mode === 'free';
+    $$('[data-modes]').forEach(el => { el.hidden = !el.dataset.modes.split(' ').includes(mode); });
+    $('#configHeading').textContent = mode === 'free' ? '输入' : '练习设置';
+    $('[data-panel="config"]').dataset.panelName = $('#configHeading').textContent;
     applyLayout();
     $$('[data-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === mode)));
     $('#modeHeading').textContent = mode === 'free' ? '自由分析' : mode === 'progression' ? '和弦进行' : '和弦练习';
-    $('#progressionField').hidden = mode !== 'progression';
-    $('#planSelect').closest('label').hidden = mode === 'progression';
     $('#keySelect option[value="all"]').disabled = mode === 'progression';
+    $('#keySelect option[value="all"]').hidden = mode === 'progression';
     if (mode === 'progression' && $('#keySelect').value === 'all') $('#keySelect').value = '0';
     buildDeck(); persistConfig();
   }
@@ -207,11 +225,15 @@
     });
     $('#startButton').disabled = mode === 'free';
     $('#stopButton').disabled = !active;
+    $('#stopButton').hidden = !active;
     $('#skipButton').disabled = run?.state !== 'running' || run.waiting === 'advance';
+    $('#skipButton').hidden = $('#skipButton').disabled;
     const label = run?.state === 'running' ? '暂停' : run?.state === 'paused' ? '继续' : '开始练习';
     $('#startButton').innerHTML = `<i data-lucide="${run?.state === 'running' ? 'pause' : 'play'}"></i><span>${label}</span>`;
     $('#previewButton').disabled = !sound || mode === 'free';
+    $('#previewButton').hidden = $('#previewButton').disabled;
     $('#applyFifthsButton').disabled = active || mode === 'free';
+    $('#applyFifthsButton').hidden = $('#applyFifthsButton').disabled;
     icons();
   }
   function renderTarget() {
@@ -604,7 +626,7 @@
     pointers.forEach(source => input.clear(source)); pointers.clear(); refreshNotes();
   }
   readStorage();
-  setupPanels(); setupFifths();
+  setupThemes(); setupPanels(); setupFifths();
   $('#keySelect').append(new Option('全部 12 调', 'all'), ...Array.from({length:12}, (_, i) => new Option(pretty(pitchName(i)), i)));
   $('#keySelect').value = '0';
   $('#channelSelect').append(...Array.from({length:16}, (_, i) => new Option(`第 ${i + 1} 通道`, i)));

@@ -17,7 +17,7 @@ let app;
   const page = await app.firstWindow(), errors = [];
   await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].show());
   page.on('pageerror', error => errors.push(error.message));
-  await page.waitForSelector('#modeHeading');
+  await page.waitForSelector('#modeHeading',{state:'attached'});
   assert.equal(await page.evaluate(() => typeof navigator.requestMIDIAccess), 'function');
   assert.equal(await page.evaluate(() => typeof window.practiceDesktop?.pin), 'function');
   const realMidi = await page.evaluate(async () => {
@@ -181,10 +181,11 @@ let app;
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('chord-lens-practice-v1')).sessions[0].complete),true);
 
   await page.locator('[data-mode="free"]').click();
+  const freeBaseline = await snapshot();
   await page.locator('#ruleSelect').evaluate(el => el.value = 'pitch');
   for (const values of [[60,64,67], Array.from({length:36},(_,i) => 48+i), [48,60,64,67,70,74,77,81]]) {
     await page.locator('#clearButton').click(); await notesOn(values); await settle(350);
-    assert.deepEqual(await snapshot(), baseline);
+    assert.deepEqual(await snapshot(), freeBaseline);
     assert.deepEqual(await geometry(), []);
   }
   await page.locator('#clearButton').click();

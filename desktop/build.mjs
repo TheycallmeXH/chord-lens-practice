@@ -18,7 +18,7 @@ const app = path.join(destination, 'resources/app');
 await rm(app, {recursive:true,force:true});
 await mkdir(path.join(app, 'desktop'), { recursive: true });
 await cp(path.join(root, 'icons'), path.join(app, 'desktop/icons'), { recursive:true });
-for (const file of ['main.cjs', 'preload.cjs', 'index.html', 'style.css', 'renderer.js', 'practice.js']) {
+for (const file of ['main.cjs', 'preload.cjs', 'index.html', 'style.css', 'themes.css', 'themes.js', 'renderer.js', 'practice.js']) {
   await cp(path.join(root, file), path.join(app, 'desktop', file));
 }
 for (const file of ['engine.js', 'vendor/tonal.min.js', 'vendor/tonal-LICENSE.txt',

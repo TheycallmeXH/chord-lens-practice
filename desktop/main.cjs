@@ -1,4 +1,5 @@
-const { app, BrowserWindow, session, ipcMain, dialog, Menu, screen } = require('electron');
+const { app, BrowserWindow, session, ipcMain, dialog, Menu, screen, nativeTheme } = require('electron');
+const themes = require('./themes.js');
 const { join } = require('node:path');
 const { writeFile } = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
@@ -31,7 +32,7 @@ if (ownsWindow) app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   window = new BrowserWindow({
     width: 1480, height: 960, minWidth: 1120, minHeight: 740,
-    title: '和弦镜 · 练琴', backgroundColor: '#242424', show: !testMode,
+    title: '和弦镜 · 练琴', backgroundColor: '#242424', show: false,
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#414141', symbolColor: '#dededb', height: 42 },
     icon: join(__dirname, 'icons/app.ico'),
@@ -39,6 +40,15 @@ if (ownsWindow) app.whenReady().then(() => {
       preload: join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false,
       sandbox: true, backgroundThrottling: false
     }
+  });
+  window.once('ready-to-show', () => { if (!testMode) window.show(); });
+  ipcMain.handle('practice:theme', (event, id) => {
+    const theme = themes.find(id);
+    if (event.sender !== window.webContents || !theme) return false;
+    nativeTheme.themeSource = theme.light ? 'light' : 'dark';
+    window.setBackgroundColor(theme.background);
+    window.setTitleBarOverlay({color:theme.title,symbolColor:theme.symbol,height:42});
+    return true;
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event, url) => {
