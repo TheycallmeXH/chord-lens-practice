@@ -5,8 +5,9 @@ const { _electron } = require('playwright');
 
 // Native sizing, view restoration and uninterrupted MIDI are one cross-process contract.
 (async () => {
+  const executablePath = resolve(__dirname, process.argv.includes('--local') ? '../../dist/和弦镜练琴版/和弦镜练琴版.exe' : '../dist/和弦镜练琴版/和弦镜练琴版.exe');
   const app = await _electron.launch({
-    executablePath:resolve(__dirname, '../dist/和弦镜练琴版/和弦镜练琴版.exe'),
+    executablePath,
     args:['--practice-test','--practice-test-no-midi']
   });
   try {
@@ -124,7 +125,7 @@ const { _electron } = require('playwright');
     assert.ok(Math.abs((await nativeState()).bounds.width - 280) <= 1, 'last compact size is remembered');
     await chord([57,60,64]);
     assert.equal(await page.locator('#compactSymbol').textContent(), 'Am');
-    await page.locator('#exitCompactButton').click();
+    await page.locator('#exitCompactButton').click(); await settle();
     await app.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows()[0]; win.show(); win.maximize();
     });
@@ -134,12 +135,12 @@ const { _electron } = require('playwright');
     assert.equal((await nativeState()).maximized, false);
     await page.locator('#exitCompactButton').click(); await settle();
     assert.equal((await nativeState()).maximized, true, 'maximized window is restored');
-    assert.equal(await page.evaluate(() => window.audioCreations), 0);
-    assert.equal(await page.locator('#soundButton').getAttribute('aria-pressed'), 'false');
+    assert.equal(await page.evaluate(() => window.audioCreations), 1);
+    assert.equal(await page.locator('#soundButton').getAttribute('aria-pressed'), 'true');
     assert.deepEqual(errors, []);
 
     const ResEdit = await import('resedit');
-    const image = ResEdit.NtExecutable.from(await readFile(resolve(__dirname,'../dist/和弦镜练琴版/和弦镜练琴版.exe')));
+    const image = ResEdit.NtExecutable.from(await readFile(executablePath));
     const resources = ResEdit.NtExecutableResource.from(image);
     const groups = ResEdit.Resource.IconGroupEntry.fromEntries(resources.entries);
     assert.ok(groups.length);

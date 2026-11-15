@@ -23,8 +23,9 @@ const {rm}=require('node:fs/promises');
     await page.waitForSelector('#soundfontButton',{state:'attached'});
     phase('page loaded');
     await page.evaluate(()=>localStorage.clear());
+    await page.locator('[data-mode="chords"]').click();
     phase('storage cleared');
-    await page.evaluate(()=>{
+    await page.context().addInitScript(()=>{
       const port={id:'sf2-midi',name:'SF2 MIDI',state:'connected',async open(){return this;}};
       Object.defineProperty(navigator,'requestMIDIAccess',{value:async()=>({inputs:new Map([[port.id,port]])})});
       window.sendMidi=data=>port.onmidimessage?.({data:new Uint8Array(data)});
@@ -48,7 +49,6 @@ const {rm}=require('node:fs/promises');
         }
       };
       window.sf2Loads=0;window.sf2Notes=[];
-      const OriginalPiano=window.SoundfontPiano;
       Object.defineProperty(window,'SoundfontPiano',{
         configurable:true,
         set(Class) {
@@ -58,8 +58,8 @@ const {rm}=require('node:fs/promises');
           },configurable:true});
         }
       });
-      window.SoundfontPiano=OriginalPiano;
     });
+    await page.reload();
     phase('instrumentation installed');
     await page.locator('#connectButton').click();
     await page.waitForFunction(()=>document.querySelector('#midiStatus').textContent==='1 MIDI 输入');
@@ -67,12 +67,14 @@ const {rm}=require('node:fs/promises');
     const info=await page.evaluate(()=>practiceDesktop.soundfontInfo());
     assert.equal(info.name,local?'Equinox_Grand_Pianos.sf2':'akai_steinway.sf2');
     assert.equal(info.available,true);
-    assert.equal(await page.evaluate(()=>audioStarts),0,'muted startup must not initialize audio');
-    await page.locator('#soundButton').click();
+    assert.equal(await page.evaluate(()=>audioStarts),1,'default sound initializes the piano');
+    assert.equal(await page.locator('#soundButton').getAttribute('aria-pressed'),'true');
+    assert.equal(await page.locator('#monitorToggle').isChecked(),true);
     await page.waitForFunction(()=>window.sf2Preset,null,{timeout:15000});
     phase('samples ready');
     assert.equal(await page.evaluate(()=>sf2Preset.program),0);
     await page.locator('#settingsButton').click();
+    await page.locator('[data-settings-tab="audio"]').click();
     await page.screenshot({path:resolve(__dirname,`test-results/${local?'local-equinox':'native-akai'}-settings.png`),scale:'css'});
     await page.locator('#monitorToggle').check();
     await page.locator('#settingsDialog [data-close]').click();
@@ -125,11 +127,11 @@ const {rm}=require('node:fs/promises');
     assert.equal(await page.evaluate(()=>outputPeak()),0,'switching sound bank while muted stays silent');
     await page.locator('#settingsDialog [data-close]').click();
     await page.reload();
-    assert.equal(await page.locator('#soundButton').getAttribute('aria-pressed'),'false');
+    assert.equal(await page.locator('#soundButton').getAttribute('aria-pressed'),'true');
     assert.equal((await page.evaluate(()=>practiceDesktop.soundfontInfo())).name,'akai_steinway.sf2','chosen bank persists after restart');
     assert.deepEqual(errors,[]);
     assert.deepEqual(consoleErrors.filter(text=>!text.includes('ERR_FILE_NOT_FOUND')),[]);
-    console.log(`SF2: ${local?'Equinox local':'Akai distribution'} default, real sampled output, velocity, retrigger, sustain, tuning, preview, replacement, mute, cache and silent restart passed.`);
+    console.log(`SF2: ${local?'Equinox local':'Akai distribution'} default, real sampled output, velocity, retrigger, sustain, tuning, preview, replacement, mute, cache and enabled restart passed.`);
   } catch(error) {
     console.error('Renderer:',await (await app.firstWindow()).evaluate(()=>({
       toast:document.querySelector('#toast').textContent,loads:window.sf2Loads,

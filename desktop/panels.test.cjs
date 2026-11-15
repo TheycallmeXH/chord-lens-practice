@@ -103,7 +103,7 @@ async function checkPanels(page, resize, label) {
   assert.equal(await page.locator('.sidebar').isVisible(),false);
   assert.equal(await page.locator('[data-collapse="fifths"]').getAttribute('aria-expanded'),'false');
   assert.equal(await page.locator('[data-collapse="attempts"]').getAttribute('aria-expanded'),'false');
-  assert.equal(await page.locator('#soundButton').getAttribute('aria-pressed'),'false');
+  assert.equal(await page.locator('#soundButton').getAttribute('aria-pressed'),'true');
   assert.equal(await page.locator('#recordCount').textContent(),'1');
   await page.locator('#resetLayoutButton').click();
   assert.equal(await page.locator('.sidebar').isVisible(),true);

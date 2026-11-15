@@ -59,6 +59,14 @@ let app;
   await page.reload();
   await page.waitForFunction(() => document.querySelector('#midiStatus').textContent === '1 MIDI 输入');
   await page.evaluate(() => document.fonts.ready);
+  assert.equal(await page.locator('#soundButton').getAttribute('aria-pressed'),'true');
+  assert.equal(await page.locator('#monitorToggle').isChecked(),true);
+  await page.locator('#soundButton').click();
+  await page.locator('#settingsButton').click();
+  await page.locator('[data-settings-tab="practice"]').click();
+  await page.locator('#hintDelayInput').fill('0');
+  await page.locator('#hintDelayInput').dispatchEvent('change');
+  await page.locator('#settingsDialog [data-close]').click();
   if (process.argv.includes('--release-check')) {
     await page.locator('#startButton').click();
     for (let i=0;i<12;i++) await page.locator('#skipButton').click();
@@ -75,8 +83,11 @@ let app;
   const send = async data => page.evaluate(data => window.sendMidi(data), data);
   const notesOn = async notes => { for (const midi of notes) await send([144,midi,100]); };
   const notesOff = async notes => { for (const midi of notes) await send([128,midi,0]); };
-  const targetNotes = () => page.evaluate(() => [...document.querySelectorAll('#targetNotes span')]
-    .map(el => Tonal.Note.midi(el.textContent.replaceAll('♯','#').replaceAll('♭','b'))));
+  const targetNotes = async () => {
+    await page.waitForSelector('#targetNotes span');
+    return page.evaluate(() => [...document.querySelectorAll('#targetNotes span')]
+      .map(el => Tonal.Note.midi(el.textContent.replaceAll('♯','#').replaceAll('♭','b'))));
+  };
   const snapshot = () => page.evaluate(() =>
     ['.performance','.sequence-band','.keyboard-section','#intervals','#piano','.session-bar','.notes-panel','.attempt-panel','.next-panel']
       .map(selector => { const r = document.querySelector(selector).getBoundingClientRect(); return [selector,r.y,r.height]; }));
@@ -102,7 +113,7 @@ let app;
   await page.locator('#metroButton').click();
   await settle(1000);
   assert.equal(await page.locator('#beatLights .on').count(), 1);
-  assert.equal(await page.evaluate(() => audioStarts), 0, 'muted metronome must not create audio');
+  assert.equal(await page.evaluate(() => audioStarts), 1, 'metronome reuses the shared audio context');
   await page.locator('#metroButton').click();
   await page.locator('#pinButton').click();
   await page.waitForFunction(() => document.querySelector('#pinButton').getAttribute('aria-pressed') === 'true');
@@ -208,6 +219,7 @@ let app;
 
   await page.locator('#soundButton').click();
   await page.locator('#settingsButton').click();
+  await page.locator('[data-settings-tab="audio"]').click();
   await page.locator('#monitorToggle').check();
   await page.locator('#settingsDialog [data-close]').click(); await settle(300);
   assert.equal(await page.evaluate(() => audioStarts), 1);
@@ -219,8 +231,8 @@ let app;
   await page.locator('#clearButton').click();
   await page.reload(); await settle(300);
   assert.equal(await page.locator('#recordCount').textContent(), '3');
-  assert.equal(await page.locator('#soundButton').getAttribute('aria-pressed'), 'false');
-  assert.equal(await page.locator('#monitorToggle').isChecked(), false);
+  assert.equal(await page.locator('#soundButton').getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('#monitorToggle').isChecked(), true);
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ packaged, assertions:'native bridge, practice, pedal, pause, exact octave, export, persistence, audio, intervals, stable layout', errors },null,2));
-})().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => { if (app) await app.close(); });
+})().catch(error => { console.error(error);process.exitCode = 1; }).finally(async () => { if (app) await app.close(); });

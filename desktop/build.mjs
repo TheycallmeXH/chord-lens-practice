@@ -19,7 +19,7 @@ const app = path.join(destination, 'resources/app');
 await rm(app, {recursive:true,force:true});
 await mkdir(path.join(app, 'desktop'), { recursive: true });
 await cp(path.join(root, 'icons'), path.join(app, 'desktop/icons'), { recursive:true });
-for (const file of ['main.cjs', 'preload.cjs', 'soundfont.cjs', 'piano-audio.js', 'index.html', 'style.css', 'themes.css', 'themes.js', 'renderer.js', 'practice.js']) {
+for (const file of ['main.cjs', 'preload.cjs', 'about.cjs', 'app-info.js', 'soundfont.cjs', 'piano-audio.js', 'midi-import.js', 'midi-worker.js', 'midi-ui.js', 'index.html', 'style.css', 'themes.css', 'themes.js', 'renderer.js', 'practice.js']) {
   await cp(path.join(root, file), path.join(app, 'desktop', file));
 }
 for (const file of ['engine.js', 'vendor/tonal.min.js', 'vendor/tonal-LICENSE.txt',
@@ -29,6 +29,11 @@ for (const file of ['engine.js', 'vendor/tonal.min.js', 'vendor/tonal-LICENSE.tx
 }
 await mkdir(path.join(app, 'assets'), { recursive: true });
 await cp(path.join(root,'../assets/synth'),path.join(app,'assets/synth'),{recursive:true});
+await cp(path.join(root,'../assets/midi'),path.join(app,'assets/midi'),{recursive:true});
+await mkdir(path.join(app,'licenses'),{recursive:true});
+for (const [source,name] of [['LICENSE','APP-LICENSE.txt'],['THIRD_PARTY_NOTICES.md','THIRD_PARTY_NOTICES.md'],['assets/Jost-LICENSE.txt','Jost-LICENSE.txt']]) {
+  await cp(path.join(root,'..',source),path.join(app,'licenses',name));
+}
 await cp(path.join(root,'../soundfonts'),path.join(app,'soundfonts'),{recursive:true,filter:source=>
   !(process.argv.includes('--public') && path.basename(source)==='Equinox_Grand_Pianos.sf2')});
 for (const file of ['lucide.min.js', 'lucide-LICENSE.txt', ...(!localFonts ? ['Jost.ttf','Jost-LICENSE.txt'] : [])]) {

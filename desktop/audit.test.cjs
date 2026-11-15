@@ -92,7 +92,7 @@ const {pathToFileURL} = require('node:url');
     await page.evaluate(()=>[57,60,64].forEach(midi=>sendMidi([144,midi,100])));
     await page.waitForTimeout(200);
     assert.equal(await page.locator('#playedSymbol').textContent(),'Am');
-    assert.equal(await page.evaluate(()=>audioStarts),0);
+    assert.equal(await page.evaluate(()=>audioStarts),1,'default sound initializes one shared audio context');
     assert.deepEqual(errors,[]);
     console.log(JSON.stringify({passed:true,idleDomMutations:0,redundantAnalyses:0,controllerMessages:10000,controllerMs:Math.round(pressure),checks:'corrupt history, stable free layout, mute, synchronous/stale MIDI failures'}));
   } finally {await browser.close();}

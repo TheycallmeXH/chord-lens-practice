@@ -1,7 +1,7 @@
 {
   "name": "chord-lens-practice",
   "productName": "和弦镜练琴版",
-  "version": "1.2.2",
+  "version": "1.0.0",
   "private": true,
   "description": "Local MIDI piano practice desktop",
   "license": "MIT",
@@ -9,13 +9,14 @@
   "scripts": {
     "postinstall": "node node_modules/electron/install.js && node vendor-audio.mjs",
     "start": "electron .",
-    "test": "node --test practice.test.cjs ../midi-chords/engine.test.cjs",
-    "test:ui": "node audit.test.cjs && node panels.test.cjs",
+    "test": "node --test practice.test.cjs midi-import.test.cjs ../midi-chords/engine.test.cjs",
+    "test:ui": "node audit.test.cjs && node panels.test.cjs && node practice-ui.test.cjs && node progression-ui.test.cjs",
     "test:themes": "node themes.test.cjs",
     "test:soundfont": "node soundfont.test.cjs",
     "test:midi": "node midi-connection.test.cjs",
     "test:midi:native": "node midi-native.test.cjs",
-    "test:desktop": "node smoke.cjs --packaged && node compact.test.cjs && node themes.test.cjs --packaged",
+    "test:pin": "node pin.test.cjs",
+    "test:desktop": "node smoke.cjs --packaged && node compact.test.cjs && node pin.test.cjs --packaged && node themes.test.cjs --packaged",
     "build": "node build.mjs"
   },
   "devDependencies": {

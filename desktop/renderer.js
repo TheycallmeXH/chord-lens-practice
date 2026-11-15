@@ -3,7 +3,7 @@
   const $ = selector => document.querySelector(selector);
   const $$ = selector => [...document.querySelectorAll(selector)];
   const { MidiState, createRecognizer, noteName, pitchName, pretty, mod, emotion } = ChordLens;
-  const { Session, createDeck, evaluate } = PianoPractice;
+  const { Session, createDeck, qualities, categories, levels, progressions, availableTypes } = PianoPractice;
   const recognizer = createRecognizer(Tonal), input = new MidiState();
   const measureContext = document.createElement('canvas').getContext('2d');
   const icons = () => lucide.createIcons();
@@ -11,7 +11,8 @@
   const clock = () => performance.now();
   const formatTime = ms => `${Math.floor(ms / 60000).toString().padStart(2, '0')}:${Math.floor(ms / 1000 % 60).toString().padStart(2, '0')}`;
   const computerKeys = { KeyA:60, KeyW:61, KeyS:62, KeyE:63, KeyD:64, KeyF:65, KeyT:66, KeyG:67, KeyY:68, KeyH:69, KeyU:70, KeyJ:71, KeyK:72 };
-  const plans = { triads:'大小三和弦', sevenths:'七和弦', inversions:'三和弦转位' };
+  const plans = Object.fromEntries(Object.entries(categories).map(([id,item]) => [id,item.name]));
+  plans.mixed = '本级混合';
   const storageKey = 'chord-lens-practice-v1';
   let saved = { sessions: [], config: {}, layout: {} };
   let layout = { collapsed:{}, leftHidden:false, rightHidden:false, fifthsIndex:0, fifthsRing:'major' };
@@ -21,8 +22,11 @@
   let notes = [], analysis = recognizer.analyze([]), chosen = null, selectedId = null, octave = 3, intervalMode = 'adjacent';
   let mode = 'chords', deck, run = null, sessionMeta, recordedRun = null, latestEvent = '', analysisTimer;
   let firstAnalysisAt = 0, bpm = 80, beats = 4, metro = false, beatStart = 0, nextBeat = 0, lastVisualBeat = -1;
-  let sound = false, audio, master, piano, replacingSoundfont = false, tuning = 440, audioGeneration = 0;
+  let sound = true, audio, master, piano, replacingSoundfont = false, tuning = 440, audioGeneration = 0;
   let compact = false, switchingView = false;
+  let hintVisible = false, hintKey = '', settingsTab = 'practice';
+  let imported = null;
+  const isImported = () => mode === 'progression' && $('#progressionSelect').value === 'imported' && imported;
   let theme = PracticeThemes.find(document.documentElement.dataset.theme) || PracticeThemes.choices[0];
   let tickTimer = null, feedbackKey = '', analysisKey = '', noteStateKey = '';
   const voices = new Map(), previewVoices = new Set(), metroVoices = new Set(), onsets = new Map(), computerDown = new Set(), pointers = new Map(), ports = new Map(), failedPorts = new Set();
@@ -54,11 +58,34 @@
       mode, plan:$('#planSelect').value, key:$('#keySelect').value,
       rule:$('#ruleSelect').value, count:Number($('#countSelect').value),
       progression:$('#progressionSelect').value, bpm, beats,
+      transition:mode === 'progression' ? $('#transitionSelect').value : 'release',
+      voiceLeading:$('#voiceLeadingSelect').value,
+      level:Number($('#levelSelect').value), quality:$('#qualitySelect').value, voicing:$('#voicingSelect').value,
+      octave:Number($('#hintOctaveSelect').value), hintDelay:Number($('#hintDelayInput').value),
       hints:$('#hintsToggle').checked, holdMs:Number($('#holdInput').value), theme:theme.id
     };
   }
   function persistConfig() { saved.config = config(); saveStorage(); }
   function persistLayout() { saved.layout = layout; saveStorage(); }
+  function populatePractice(plan = $('#planSelect').value, quality = $('#qualitySelect').value) {
+    const level = Number($('#levelSelect').value);
+    const allowed = Object.entries(categories).filter(([,item]) => item.level <= level);
+    $('#planSelect').replaceChildren(...allowed.map(([id,item]) => new Option(item.name,id)), new Option('本级混合','mixed'));
+    $('#planSelect').value = allowed.some(([id]) => id === plan) || plan === 'mixed' ? plan : 'mixed';
+    const types = $('#planSelect').value === 'mixed' ? availableTypes(level) : categories[$('#planSelect').value].types;
+    $('#qualitySelect').replaceChildren(new Option('全部','all'), ...types.map(id => new Option(qualities[id].name,id)));
+    $('#qualitySelect').value = types.includes(quality) ? quality : 'all';
+  }
+  function selectSettingsTab(id, focus = false) {
+    if (id === 'practice' && mode === 'free') id = 'midi';
+    settingsTab = id;
+    $$('[data-settings-tab]').forEach(button => {
+      const selected = button.dataset.settingsTab === id;
+      button.setAttribute('aria-selected',String(selected)); button.tabIndex = selected ? 0 : -1;
+      $('#' + button.getAttribute('aria-controls')).hidden = !selected;
+      if (selected && focus) button.focus();
+    });
+  }
   function applyTheme(id, persist = true) {
     theme = PracticeThemes.apply(id);
     $$('[data-theme-value]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.themeValue === theme.id)));
@@ -161,7 +188,7 @@
   }
   function renderFifths() {
     const selected = fifthsKeys[layout.fifthsIndex], wanted = mode === 'free' ? null : target();
-    const targetRing = wanted && ['minor','m7'].includes(wanted.quality) ? 'minor' : 'major';
+    const targetRing = wanted?.intervals.includes('3m') ? 'minor' : 'major';
     const currentRing = chosen?.intervals.includes('3m') && !chosen.intervals.includes('3M') ? 'minor' : 'major';
     $$('[data-fifths-index]').forEach(button => {
       const index = Number(button.dataset.fifthsIndex), ring = button.dataset.fifthsRing, pc = Number(button.dataset.pc);
@@ -200,7 +227,8 @@
   }
   function target() { return run ? run.target : deck?.[0]; }
   function buildDeck() {
-    deck = createDeck(Tonal, config()); run = null; recordedRun = null; latestEvent = '';
+    hintVisible = false; hintKey = '';
+    deck = isImported() ? imported.targets : createDeck(Tonal, config()); run = null; recordedRun = null; latestEvent = '';
     renderTarget(); renderSequence(); renderSession(); renderKeyboard(); paintKeys(); renderFeedback();
   }
   function updateMode(value) {
@@ -208,6 +236,7 @@
     mode = value; run = null;
     document.body.classList.toggle('free-mode', mode === 'free');
     $$('[data-modes]').forEach(el => { el.hidden = !el.dataset.modes.split(' ').includes(mode); });
+    selectSettingsTab(settingsTab);
     $('#configHeading').textContent = mode === 'free' ? '输入' : '练习设置';
     $('[data-panel="config"]').dataset.panelName = $('#configHeading').textContent;
     applyLayout();
@@ -220,33 +249,56 @@
   }
   function renderControls() {
     const active = busy();
-    $$('[data-mode], #planSelect, #progressionSelect, #keySelect, #ruleSelect, #countSelect, #holdInput').forEach(el => {
+    $$('[data-mode], #levelSelect, #planSelect, #qualitySelect, #progressionSelect, #keySelect, #ruleSelect, #countSelect, #holdInput, #hintOctaveSelect, #voicingSelect, #transitionSelect, #voiceLeadingSelect').forEach(el => {
       el.disabled = active || (mode === 'free' && !el.dataset.mode);
     });
+    $('#voicingSelect').disabled = active || mode === 'free' || $('#planSelect').value === 'inversions';
+    const fromFile = !!isImported();
+    $('#keySelect').closest('label').hidden = mode === 'free' || fromFile;
+    $('#countSelect').closest('label').hidden = mode === 'free' || fromFile;
+    $('#hintOctaveField').hidden = fromFile;
+    $('#voiceLeadingField').hidden = mode !== 'progression' || fromFile;
+    $('#midiSourceRow').hidden = !fromFile;
+    $('#midiSourceName').textContent = fromFile ? imported.name : '';
+    $('#midiSourceName').title = fromFile ? imported.name : '';
+    $('#importMidiButton').disabled = active;
+    $('#editMidiButton').disabled = active;
+    $('#shuffleButton').hidden = mode !== 'chords' || active;
     $('#startButton').disabled = mode === 'free';
     $('#stopButton').disabled = !active;
     $('#stopButton').hidden = !active;
     $('#skipButton').disabled = run?.state !== 'running' || run.waiting === 'advance';
     $('#skipButton').hidden = $('#skipButton').disabled;
-    const label = run?.state === 'running' ? '暂停' : run?.state === 'paused' ? '继续' : '开始练习';
+    const label = run?.state === 'running' ? '暂停' : run?.state === 'paused' ? '继续' : run?.state === 'done' ? '重练本轮' : '开始练习';
     $('#startButton').innerHTML = `<i data-lucide="${run?.state === 'running' ? 'pause' : 'play'}"></i><span>${label}</span>`;
     $('#previewButton').disabled = !sound || mode === 'free';
     $('#previewButton').hidden = $('#previewButton').disabled;
-    $('#applyFifthsButton').disabled = active || mode === 'free';
+    $('#applyFifthsButton').disabled = active || mode === 'free' || fromFile;
     $('#applyFifthsButton').hidden = $('#applyFifthsButton').disabled;
     icons();
   }
   function renderTarget() {
     const item = target(), free = mode === 'free';
     $('#targetSymbol').textContent = free ? '自由演奏' : pretty(item.symbol);
-    $('#targetDescription').textContent = free ? '' : `${item.name}${item.requireBass ? ' · ' + ['根位','第一转位','第二转位'][item.inversion] : ''}${$('#ruleSelect').value === 'exact' ? ' · 指定音区' : ''}`;
-    $('#targetNotes').innerHTML = free || !$('#hintsToggle').checked ? '' : item.noteNames.map(name =>
-      `<span>${escape(pretty(name))}</span>`).join('');
+    $('#targetDescription').textContent = free ? '' : `${item.name}${item.requireBass ? ' · ' + (['原位','第一转位','第二转位','第三转位','第四转位','第五转位'][item.inversion] || `第${item.inversion}转位`) : ''}${isImported() ? ' · 原文件音区' : $('#ruleSelect').value === 'exact' ? ' · 指定音区' : ''}`;
+    renderHints();
     $('#targetIndex').textContent = free ? '' : `${Math.min((run?.index || 0) + 1, (run?.deck || deck).length)} / ${(run?.deck || deck).length}`;
     const sequence = run?.deck || deck, next = sequence[(run?.index || 0) + 1];
     $('#nextSymbol').textContent = free ? '—' : next ? pretty(next.symbol) : '结束';
     $('#nextDescription').textContent = !free && next ? next.name : '';
     fitSymbols(); renderControls(); renderFifths();
+  }
+  function renderHints() {
+    const wanted = target();
+    const visible = mode !== 'free' && $('#hintsToggle').checked && !!run?.hintDue(clock(),Number($('#hintDelayInput').value) * 1000);
+    const key = JSON.stringify([visible, visible ? wanted?.notes : []]);
+    if (key === hintKey) return;
+    hintKey = key; hintVisible = visible;
+    $('#targetNotes').innerHTML = visible ? wanted.noteNames.map(name => `<span>${escape(pretty(name))}</span>`).join('') : '';
+    if (visible && !wanted.notes.every(midi => midi >= (octave + 1) * 12 && midi < (octave + 4) * 12)) {
+      octave = Math.max(-1,Math.min(7,Math.floor(wanted.notes[0] / 12) - 1)); renderKeyboard();
+    }
+    paintKeys();
   }
   function fitSymbols() {
     for (const id of ['targetSymbol','playedSymbol','compactSymbol']) {
@@ -267,8 +319,12 @@
       return;
     }
     const items = run?.deck || deck, index = run?.index || 0;
-    $('#sequenceList').innerHTML = items.map((item, i) =>
-      `<span class="sequence-item ${i === index && run?.state !== 'done' ? 'current' : i < index ? 'done' : ''}" data-step="${i}">${mode === 'progression' ? `<small>${escape(item.roman)}</small>` : ''}${escape(pretty(item.symbol))}</span>`).join('');
+    const first = items.length > 96 ? Math.max(0,Math.min(index - 12,items.length - 48)) : 0;
+    const visible = items.slice(first,items.length > 96 ? first + 48 : items.length);
+    $('#sequenceList').innerHTML = `${first ? '<span class="sequence-gap">…</span>' : ''}` + visible.map((item, offset) => {
+      const i = first + offset;
+      return `<span class="sequence-item ${i === index && run?.state !== 'done' ? 'current' : i < index ? 'done' : ''}" data-step="${i}">${mode === 'progression' ? `<small>${escape(item.roman)}</small>` : ''}${escape(pretty(item.symbol))}</span>`;
+    }).join('') + (first + visible.length < items.length ? '<span class="sequence-gap">…</span>' : '');
     const current = $(`[data-step="${index}"]`), list = $('#sequenceList');
     if (current) {
       const left = current.offsetLeft - list.offsetLeft;
@@ -286,20 +342,21 @@
     renderControls();
   }
   function renderFeedback() {
+    renderHints();
     let state = mode === 'free' ? '实时分析' : '准备', detail = '', progress = 0;
     if (run) {
       if (run.state === 'paused') state = '已暂停';
       else if (run.state === 'done') { state = run.index >= run.deck.length ? '本轮完成' : '已保存'; detail = `${run.correct} 次成功 · ${run.wrong} 次重试`; }
-      else if (run.waiting === 'advance') { state = latestEvent === 'skipped' ? '已跳过' : '正确'; detail = '松键进入下一题'; progress = latestEvent === 'skipped' ? 0 : 1; }
+      else if (run.waiting === 'advance') { state = latestEvent === 'skipped' ? '已跳过' : '正确'; detail = run.transition === 'connected' ? '接下一和弦，可保留共同音' : '松键进入下一题'; progress = latestEvent === 'skipped' ? 0 : 1; }
       else if (run.waiting === 'ready') { state = '请先松键'; }
       else if (run.matchedSince !== null) { state = '保持'; progress = Math.min(1, (clock() - run.matchedSince) / run.holdMs); }
       else if (run.feedback) {
         const feedback = run.feedback, name = midi => run.rule === 'exact' ? noteName(midi) : pretty(pitchName(midi));
         state = feedback.extra.length ? '检查错音' : feedback.bassWrong ? '检查低音' : '补齐音符';
         detail = [
-          feedback.missing.length ? '缺 ' + feedback.missing.map(name).join(' ') : '',
+          hintVisible && feedback.missing.length ? '缺 ' + feedback.missing.map(name).join(' ') : '',
           feedback.extra.length ? '多 ' + feedback.extra.map(name).join(' ') : '',
-          feedback.bassWrong ? '低音 ' + pretty(pitchName(run.target.bass)) : ''
+          hintVisible && feedback.bassWrong ? '低音 ' + pretty(pitchName(run.target.bass)) : ''
         ].filter(Boolean).join(' · ');
       } else { state = latestEvent === 'wrong' ? '再试一次' : '等待弹奏'; }
     }
@@ -323,10 +380,10 @@
     if (run?.state === 'running') run.pause(clock());
     else if (run?.state === 'paused') run.resume(clock());
     else {
-      if (run) deck = createDeck(Tonal, config());
       run = new Session(deck, config());
       run.start(clock()); recordedRun = null; latestEvent = '';
-      sessionMeta = { startedAt:new Date().toISOString(), ...config() };
+      sessionMeta = { startedAt:new Date().toISOString(), ...config(),count:deck.length,
+        progressionName:isImported() ? imported.name : progressions[$('#progressionSelect').value]?.name };
       run.update(notes.map(note => note.midi), clock());
     }
     renderTarget(); renderSequence(); renderSession(); renderFeedback(); paintKeys();
@@ -362,7 +419,8 @@
   function renderRecords() {
     $('#savedSessions').innerHTML = saved.sessions.length ? saved.sessions.map(item => {
       const total = item.correct + item.wrong + item.skipped;
-      return `<div class="saved-session"><div>${new Date(item.startedAt).toLocaleDateString('zh-CN')}<small>${new Date(item.startedAt).toLocaleTimeString('zh-CN', {hour12:false})}</small></div><div>${escape(item.mode === 'progression' ? item.progression : plans[item.plan])}<small>${item.complete ? '完成' : '提前结束'} · ${item.correct}/${item.count} · ${item.key === 'all' ? '12 调' : escape(pretty(pitchName(Number(item.key))))}</small></div><span>${formatTime(item.durationMs)}</span><span>${total ? Math.round(item.correct / total * 100) : 0}%</span></div>`;
+      const name = item.mode === 'progression' ? item.progressionName || progressions[item.progression]?.name || item.progression : qualities[item.quality]?.name || plans[item.plan] || '和弦练习';
+      return `<div class="saved-session"><div>${new Date(item.startedAt).toLocaleDateString('zh-CN')}<small>${new Date(item.startedAt).toLocaleTimeString('zh-CN', {hour12:false})}</small></div><div>${escape(name)}<small>${item.level ? `L${item.level} · ` : ''}${item.complete ? '完成' : '提前结束'} · ${item.correct}/${item.count} · ${item.key === 'all' ? '12 调' : escape(pretty(pitchName(Number(item.key))))}</small></div><span>${formatTime(item.durationMs)}</span><span>${total ? Math.round(item.correct / total * 100) : 0}%</span></div>`;
     }).join('') : '<div class="muted">—</div>';
     $('#exportButton').disabled = !saved.sessions.length;
   }
@@ -441,6 +499,7 @@
     }
     if (attack) onsets.set(`${source}:${data[0] & 15}:${midi}`, { source, channel:data[0] & 15, midi, time:clock() });
     refreshNotes(true);
+    if (attack) unlockAudio();
   }
   function refreshNotes(follow = false) {
     notes = input.notes(includePedal);
@@ -518,7 +577,7 @@
     $$('[data-midi]').forEach(key => {
       const midi = Number(key.dataset.midi), note = map.get(midi);
       const desired = mode !== 'free' && wanted && (exact ? wanted.notes.includes(midi) : wanted.notes.some(n => mod(n) === mod(midi)));
-      key.classList.toggle('target', !!desired && $('#hintsToggle').checked);
+      key.classList.toggle('target', hintVisible && wanted.notes.includes(midi));
       key.classList.toggle('active', !!note?.held);
       key.classList.toggle('pedaled', !!note && !note.held);
       key.classList.toggle('wrong', !!note && !!checking && !desired);
@@ -654,23 +713,60 @@
   }
   readStorage();
   setupThemes(); setupPanels(); setupFifths();
+  for (const group of ['流行','小调','爵士','调式','蓝调']) {
+    const options = document.createElement('optgroup');options.label = group;
+    options.append(...Object.entries(progressions).filter(([,item])=>item.group===group).map(([id,item])=>new Option(item.name,id)));
+    $('#progressionSelect').append(options);
+  }
+  $('#progressionSelect').value = 'ii-V-I';
+  const midiImport = setupMidiImport({canImport:()=>!busy(),onApply:data => {
+    imported = data;
+    if (!$('#progressionSelect option[value="imported"]')) $('#progressionSelect').append(new Option('导入的 MIDI','imported'));
+    $('#progressionSelect').value = 'imported';
+    bpm = Math.max(40,Math.min(240,data.bpm));$('#bpmInput').value = bpm;resetMetro();
+    updateMode('progression');
+  }});
+  $('#importMidiButton').onclick = () => midiImport.open();
+  $('#editMidiButton').onclick = () => midiImport.open();
+  $('#shuffleButton').onclick = () => {if (!busy()) buildDeck();};
   $('#keySelect').append(new Option('全部 12 调', 'all'), ...Array.from({length:12}, (_, i) => new Option(pretty(pitchName(i)), i)));
   $('#keySelect').value = '0';
   $('#channelSelect').append(...Array.from({length:16}, (_, i) => new Option(`第 ${i + 1} 通道`, i)));
   const restored = saved.config;
-  for (const [id, field] of [['planSelect','plan'],['keySelect','key'],['ruleSelect','rule'],['countSelect','count'],['progressionSelect','progression']]) {
+  $('#levelSelect').append(...levels.map((name,i) => new Option(`${i + 1} · ${name}`,i + 1)));
+  const legacyLevel = categories[restored.plan]?.level || 1;
+  $('#levelSelect').value = Number.isInteger(restored.level) && restored.level >= 1 && restored.level <= 5 ? restored.level : legacyLevel;
+  populatePractice(restored.plan || 'triads',restored.quality);
+  for (const [id, field] of [['keySelect','key'],['ruleSelect','rule'],['countSelect','count'],['progressionSelect','progression'],['voicingSelect','voicing'],['hintOctaveSelect','octave'],['transitionSelect','transition'],['voiceLeadingSelect','voiceLeading']]) {
     if (restored[field] !== undefined && [...$('#' + id).options].some(option => option.value === String(restored[field]))) $('#' + id).value = String(restored[field]);
   }
   if (Number.isFinite(restored.bpm)) bpm = Math.max(40, Math.min(240, restored.bpm));
   if ([2,3,4,6].includes(restored.beats)) beats = restored.beats;
   if (typeof restored.hints === 'boolean') $('#hintsToggle').checked = restored.hints;
   if (Number.isFinite(restored.holdMs)) $('#holdInput').value = Math.max(100, Math.min(2000, restored.holdMs));
+  if (Number.isFinite(restored.hintDelay)) $('#hintDelayInput').value = Math.max(0, Math.min(120, restored.hintDelay));
   $('#bpmInput').value = bpm; $('#meterSelect').value = beats;
   $$('[data-mode]').forEach(button => { button.onclick = () => updateMode(button.dataset.mode); });
-  for (const id of ['planSelect','progressionSelect','keySelect','ruleSelect','countSelect']) {
+  for (const id of ['qualitySelect','progressionSelect','keySelect','ruleSelect','countSelect','voicingSelect','hintOctaveSelect','transitionSelect','voiceLeadingSelect']) {
     $('#' + id).onchange = () => { if (!busy()) { buildDeck(); persistConfig(); } };
   }
-  $('#hintsToggle').onchange = () => { renderTarget(); paintKeys(); persistConfig(); };
+  $('#levelSelect').onchange = () => { if (!busy()) { populatePractice('mixed'); buildDeck(); persistConfig(); } };
+  $('#planSelect').onchange = () => { if (!busy()) { populatePractice(); buildDeck(); persistConfig(); } };
+  $('#hintsToggle').onchange = () => { renderFeedback(); persistConfig(); };
+  $('#hintDelayInput').onchange = event => {
+    const value = Number(event.target.value);
+    event.target.value = Number.isFinite(value) ? Math.max(0,Math.min(120,value)) : 8;
+    renderFeedback(); persistConfig();
+  };
+  $$('[data-settings-tab]').forEach(button => {
+    button.onclick = () => selectSettingsTab(button.dataset.settingsTab);
+    button.onkeydown = event => {
+      const tabs = $$('[data-settings-tab]').filter(tab => !tab.hidden), index = tabs.indexOf(button);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 :
+        event.key === 'ArrowDown' ? (index + 1) % tabs.length : event.key === 'ArrowUp' ? (index + tabs.length - 1) % tabs.length : -1;
+      if (next >= 0) { event.preventDefault(); selectSettingsTab(tabs[next].dataset.settingsTab,true); }
+    };
+  });
   $('#startButton').onclick = beginOrPause;
   $('#compactModeButton').onclick = () => setCompact(true);
   $('#exitCompactButton').onclick = () => setCompact(false);
@@ -702,6 +798,32 @@
     analyze();
   };
   $('#soundButton').onclick = () => setSound(!sound);
+  function showAbout(info) {
+    if (!info) return;
+    $('#aboutVersion').textContent = info.version;
+    $('#licenseList').innerHTML = info.licenses.map(item=>
+      `<div class="license-row"><span>${escape(item.name)}</span><span>${escape(item.license)}</span>${window.practiceDesktop ? `<button class="icon" data-license="${item.id}" aria-label="查看 ${escape(item.name)} 许可" title="查看许可"><i data-lucide="${item.external ? 'external-link' : 'file-text'}"></i></button>` : ''}</div>`).join('');
+    icons();
+  }
+  showAbout(PracticeInfo);
+  window.practiceDesktop?.about().then(showAbout).catch(error=>toast(error.message));
+  $('#repositoryLink').onclick = event => {
+    if (window.practiceDesktop) {event.preventDefault();window.practiceDesktop.repository().catch(error=>toast(error.message));}
+  };
+  $('#licenseList').onclick = async event => {
+    const button = event.target.closest('[data-license]');
+    if (!button || !window.practiceDesktop) return;
+    button.disabled = true;
+    try {
+      if (button.dataset.license === 'chromium') {
+        const error = await window.practiceDesktop.chromiumLicense();if(error) toast(error);
+      } else {
+        const info = await window.practiceDesktop.license(button.dataset.license);
+        $('#licenseTitle').textContent = info.name;$('#licenseText').textContent = info.text;$('#licenseDialog').showModal();
+      }
+    } catch(error) {toast(error.message);}
+    finally {button.disabled = false;}
+  };
   $('#soundfontField').hidden=!window.practiceDesktop;
   async function showSoundfont(info) {
     if(!info) return;
@@ -744,7 +866,12 @@
     finally { button.disabled = false; }
   };
   for (const [button, dialog] of [['settingsButton','settingsDialog'],['helpButton','helpDialog'],['recordsButton','recordsDialog']]) {
-    $('#' + button).onclick = () => { if (dialog === 'recordsDialog') renderRecords(); $('#' + dialog).showModal(); };
+    $('#' + button).onclick = () => {
+      if (dialog === 'recordsDialog') renderRecords();
+      if (dialog === 'settingsDialog') selectSettingsTab(settingsTab);
+      $('#' + dialog).showModal();
+      if (dialog === 'settingsDialog') $(`[data-settings-tab="${settingsTab}"]`).focus();
+    };
   }
   $$('[data-close]').forEach(button => { button.onclick = () => button.closest('dialog').close(); });
   $('#exportButton').onclick = async () => {
@@ -813,5 +940,6 @@
   document.fonts.ready.then(() => { fitSymbols(); renderIntervals(); });
   updateMode(['free','chords','progression'].includes(restored.mode) ? restored.mode : 'chords');
   renderDaily(); renderRecords(); renderBeats(); analyze(); connect(); icons();
+  setSound(true);
   window.practiceDesktop?.compact().then(value => { if (value) setCompact(true); }).catch(error => toast(error.message));
 })();

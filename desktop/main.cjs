@@ -1,11 +1,13 @@
-const { app, BrowserWindow, session, ipcMain, dialog, Menu, screen, nativeTheme } = require('electron');
+const { app, BrowserWindow, session, ipcMain, dialog, Menu, screen, nativeTheme, shell } = require('electron');
+const {metadata,readLicense} = require('./about.cjs');
 const themes = require('./themes.js');
 const {createSoundfontStore} = require('./soundfont.cjs');
-const { join } = require('node:path');
+const { join, dirname } = require('node:path');
 const { writeFile } = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
 
 const testMode = process.argv.includes('--practice-test');
+app.commandLine.appendSwitch('autoplay-policy','no-user-gesture-required');
 if (testMode) app.setPath('userData', join(__dirname, '.test-profile'));
 app.setName('和弦镜练琴版');
 app.setAppUserModelId('cn.chordlens.practice');
@@ -43,6 +45,19 @@ if (ownsWindow) app.whenReady().then(() => {
       sandbox: true, backgroundThrottling: false
     }
   });
+  ipcMain.handle('practice:about',event => event.sender===window.webContents ? metadata(app.getVersion()) : null);
+  ipcMain.handle('practice:license',(event,id) => {
+    if(event.sender!==window.webContents || typeof id!=='string') throw new Error('无效的许可请求');
+    return readLicense(id,join(__dirname,'..'),dirname(process.execPath));
+  });
+  ipcMain.handle('practice:repository',event => {
+    if(event.sender!==window.webContents) return false;
+    return shell.openExternal(metadata(app.getVersion()).repository).then(()=>true);
+  });
+  ipcMain.handle('practice:chromium-license',event => {
+    if(event.sender!==window.webContents) return false;
+    return shell.openPath(join(dirname(process.execPath),'LICENSES.chromium.html'));
+  });
   window.once('ready-to-show', () => { if (!testMode) window.show(); });
   const soundfont=createSoundfontStore(join(__dirname,'..'),app.getPath('userData'));
   ipcMain.handle('practice:soundfont-info',event=>{
@@ -74,21 +89,21 @@ if (ownsWindow) app.whenReady().then(() => {
     if (url.split('#')[0] !== pageURL) event.preventDefault();
   });
   ipcMain.handle('practice:pin', async (event, value) => {
-    if (event.sender !== window.webContents) return false;
-    const wanted = Boolean(value);
-    if (window.isAlwaysOnTop() === wanted) return wanted;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      window.setAlwaysOnTop(wanted);
-      for (let check = 0; check < 10; check++) {
-        await new Promise(resolve => setTimeout(resolve, 20));
-        if (window.isDestroyed()) return false;
-        if (window.isAlwaysOnTop() === wanted) return wanted;
-      }
-      // Windows may lose the topmost style while Electron retains its cached level.
-      window.setAlwaysOnTop(false);
-      await new Promise(resolve => setTimeout(resolve, 50));
-      if (window.isDestroyed()) return false;
+    if (event.sender !== window.webContents || typeof value !== 'boolean') return false;
+    // Windows' default floating level reorders behind the taskbar and can sink
+    // the window when the shell changes its own topmost state.
+    window.setAlwaysOnTop(value, 'pop-up-menu');
+    if (value && !window.isAlwaysOnTop()) {
+      // Reset a stale native widget level without leaving the window behind.
+      window.setAlwaysOnTop(false, 'pop-up-menu');
+      window.moveTop();
+      window.focus();
+      window.setAlwaysOnTop(true, 'pop-up-menu');
     }
+    await new Promise(resolve => setTimeout(resolve, 20));
+    if (window.isDestroyed()) return false;
+    window.moveTop();
+    window.focus();
     return window.isAlwaysOnTop();
   });
   let compact = false, fullBounds, fullMaximized = false, compactBounds;

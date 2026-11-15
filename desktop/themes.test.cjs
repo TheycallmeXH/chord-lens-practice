@@ -37,6 +37,7 @@ const {choices} = require('./themes.js');
       window.audioStarts = 0;
       const Audio = window.AudioContext;
       window.AudioContext = class extends Audio {constructor(...args){super(...args);window.audioStarts++;}};
+      window.addEventListener('DOMContentLoaded',()=>document.querySelector('#soundButton').click());
     });
     await page.reload(); await page.evaluate(()=>document.fonts.ready);
     assert.equal(await page.locator('html').getAttribute('data-theme'),'live-dark');
@@ -102,13 +103,19 @@ const {choices} = require('./themes.js');
       assert.equal(await page.locator('#stopButton').isVisible(),false,'idle stop hidden');
       assert.equal(await page.locator('#skipButton').isVisible(),false,'idle skip hidden');
       await page.locator('#settingsButton').click();
-      assert.equal(await page.locator('#holdInput').isVisible(),!free);
+      assert.equal(await page.locator('[data-settings-tab="practice"]').isVisible(),!free);
+      if (!free) {
+        await page.locator('[data-settings-tab="practice"]').click();
+        assert.equal(await page.locator('#holdInput').isVisible(),true);
+      }
+      await page.locator('[data-settings-tab="midi"]').click();
       assert.equal(await page.locator('#channelSelect').isVisible(),true);
       await page.locator('#settingsDialog [data-close]').click();
     };
     const captures = [];
     for(const theme of choices) {
       await page.locator('#settingsButton').click();
+      await page.locator('[data-settings-tab="display"]').click();
       await page.locator(`[data-theme-value="${theme.id}"]`).click();
       assert.equal(await page.locator('html').getAttribute('data-theme'),theme.id);
       assert.equal(await page.locator(`[data-theme-value="${theme.id}"]`).getAttribute('aria-pressed'),'true');
@@ -169,6 +176,7 @@ const {choices} = require('./themes.js');
     await page.waitForFunction(()=>document.querySelector('#noteCount').textContent==='1');
     const before = await page.locator('#targetSymbol').textContent();
     await page.locator('#settingsButton').click();
+    await page.locator('[data-settings-tab="display"]').click();
     await page.locator('[data-theme-value="live-light"]').click();
     await page.locator('#settingsDialog [data-close]').click();
     assert.equal(await page.locator('#targetSymbol').textContent(),before,'theme does not rebuild active deck');
@@ -189,6 +197,7 @@ const {choices} = require('./themes.js');
     assert.deepEqual(await page.locator('.interval-label').allTextContents(),['大三度','纯五度']);
     for(const theme of choices) {
       await page.locator('#settingsButton').click();
+      await page.locator('[data-settings-tab="display"]').click();
       await page.locator(`[data-theme-value="${theme.id}"]`).click();
       await page.locator('#settingsDialog [data-close]').click();
       await page.locator('#compactModeButton').click();
@@ -204,7 +213,7 @@ const {choices} = require('./themes.js');
     });
     await page.reload();await settle();
     assert.equal(await page.locator('html').getAttribute('data-theme'),'live-dark','invalid theme falls back safely');
-    assert.equal(await page.evaluate(()=>audioStarts),0);
+    assert.equal(await page.evaluate(()=>audioStarts),1);
     assert.deepEqual(errors,[]);
     if(!packaged) {
       const sharp=require('sharp'), width=444,height=288;

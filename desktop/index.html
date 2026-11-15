@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'none'">
   <title>和弦镜 · 练琴</title>
   <link rel="icon" href="icons/app.ico">
   <script src="themes.js"></script>
@@ -29,7 +29,7 @@
       <select id="meterSelect" aria-label="每小节拍数"><option value="4">4/4</option><option value="3">3/4</option><option value="2">2/4</option><option value="6">6/4</option></select>
       <div id="beatLights" class="beat-lights" aria-label="节拍指示"></div>
     </div>
-    <div class="output-controls"><span id="pedalStatus" title="踏板状态">延音 −</span><button id="soundButton" class="icon" title="开启声音" aria-label="开启声音" aria-pressed="false"><i data-lucide="volume-x"></i></button></div>
+    <div class="output-controls"><span id="pedalStatus" title="踏板状态">延音 −</span><button id="soundButton" class="icon" title="关闭声音" aria-label="关闭声音" aria-pressed="true"><i data-lucide="volume-2"></i></button></div>
   </div>
   <div class="shell">
     <button id="leftPanelButton" class="edge-toggle left" title="隐藏左侧栏" aria-label="隐藏左侧栏" aria-expanded="true" aria-controls="practiceSidebar"><i data-lucide="chevron-left"></i></button>
@@ -44,12 +44,16 @@
       <section class="practice-config" data-panel="config" data-panel-name="练习设置">
         <div class="panel-heading"><h2 id="configHeading">练习设置</h2></div>
         <div class="config-body" data-panel-body>
-        <label data-modes="chords">内容<select id="planSelect"><option value="triads">大小三和弦</option><option value="sevenths">七和弦</option><option value="inversions">三和弦转位</option></select></label>
-        <label id="progressionField" data-modes="progression" hidden>进行<select id="progressionSelect"><option value="ii-V-I">ii7 – V7 – Imaj7</option><option value="I-vi-IV-V">I – vi – IV – V7</option></select></label>
+        <label data-modes="chords">难度<select id="levelSelect" aria-label="练习难度"></select></label>
+        <label data-modes="chords">类别<select id="planSelect" aria-label="和弦类别"></select></label>
+        <label data-modes="chords">和弦<select id="qualitySelect" aria-label="具体和弦"></select></label>
+        <label id="progressionField" data-modes="progression" hidden>进行<select id="progressionSelect"></select></label>
+        <div id="midiSourceRow" class="midi-source-row" hidden><span id="midiSourceName"></span><button id="editMidiButton" class="icon" title="重新导入 MIDI" aria-label="重新导入 MIDI"><i data-lucide="file-input"></i></button></div>
+        <button id="importMidiButton" class="import-action" data-modes="progression" hidden><i data-lucide="file-up"></i>导入 MIDI</button>
         <label data-modes="chords progression">调<select id="keySelect"></select></label>
         <label data-modes="chords progression">判定<select id="ruleSelect"><option value="pitch">任意八度</option><option value="exact">指定音区</option></select></label>
         <label data-modes="chords progression">每轮<select id="countSelect"><option value="12">12 题</option><option value="24">24 题</option><option value="48">48 题</option></select></label>
-        <label class="check" data-modes="chords progression"><span>琴键提示</span><input id="hintsToggle" type="checkbox" checked></label>
+        <label class="check" data-modes="chords progression"><span>超时提示</span><input id="hintsToggle" type="checkbox" checked></label>
         <label class="check"><span>保持选音</span><input id="latchToggle" type="checkbox" checked></label>
         </div>
       </section>
@@ -78,7 +82,7 @@
           </div>
         </div>
       </section>
-      <section class="sequence-band" data-panel="sequence" data-panel-name="和弦序列"><div class="panel-heading"><span id="sequenceLabel">本轮</span></div><div id="sequenceList" class="sequence-list" data-panel-body></div></section>
+      <section class="sequence-band" data-panel="sequence" data-panel-name="和弦序列"><div class="panel-heading"><span id="sequenceLabel">本轮</span><button id="shuffleButton" class="icon" title="换一组和弦" aria-label="换一组和弦" data-modes="chords"><i data-lucide="shuffle"></i></button></div><div id="sequenceList" class="sequence-list" data-panel-body></div></section>
       <section class="keyboard-section" data-panel="keyboard" data-panel-name="键盘">
         <div class="panel-heading keyboard-heading">
           <div class="keyboard-title"><h2>键盘</h2><span id="keyRange" class="muted"></span><div class="segmented" aria-label="音程关系"><button data-interval="adjacent" aria-pressed="true" title="相邻实际音之间的音程">相邻</button><button data-interval="bass" aria-pressed="false" title="实际最低音到各音的音程">低音</button></div></div>
@@ -117,36 +121,87 @@
     </div>
   </main>
   <div id="toast" role="status"></div>
-  <dialog id="settingsDialog">
-    <div class="dialog-heading"><h2>设置</h2><button class="icon" data-close aria-label="关闭"><i data-lucide="x"></i></button></div>
-    <fieldset class="theme-picker"><legend>配色</legend><div id="themeOptions" class="theme-options" role="group" aria-label="配色方案"></div></fieldset>
-    <label id="soundfontField">钢琴音色<span id="soundfontName" class="soundfont-name">—</span><button id="soundfontButton" class="icon" title="更换 SF2 音色" aria-label="更换 SF2 音色"><i data-lucide="folder-open"></i></button></label>
-    <label>MIDI 通道<select id="channelSelect"><option value="all">全部通道</option></select></label>
-    <label class="check"><span>排除鼓通道 10</span><input id="drumsToggle" type="checkbox" checked></label>
-    <label class="check"><span>计入踏板延音</span><input id="pedalToggle" type="checkbox" checked></label>
-    <label class="check"><span>MIDI 试听</span><input id="monitorToggle" type="checkbox"></label>
-    <label data-modes="chords progression">正确保持<input id="holdInput" type="number" value="350" min="100" max="2000" step="50" aria-label="正确保持毫秒"><span class="muted">ms</span></label>
-    <label>参考音 A4<input id="tuningInput" type="number" value="440" min="400" max="480" aria-label="参考音赫兹"><span class="muted">Hz</span></label>
+  <dialog id="settingsDialog" class="preferences" aria-labelledby="settingsTitle">
+    <div class="dialog-heading"><h2 id="settingsTitle">设置</h2><button class="icon" data-close aria-label="关闭"><i data-lucide="x"></i></button></div>
+    <div class="preferences-layout">
+      <nav class="preferences-nav" role="tablist" aria-label="设置分类" aria-orientation="vertical">
+        <button id="tab-practice" role="tab" data-settings-tab="practice" aria-controls="settings-practice" aria-selected="true" data-modes="chords progression">练习</button>
+        <button id="tab-display" role="tab" data-settings-tab="display" aria-controls="settings-display" aria-selected="false" tabindex="-1">界面与配色</button>
+        <button id="tab-audio" role="tab" data-settings-tab="audio" aria-controls="settings-audio" aria-selected="false" tabindex="-1">音频</button>
+        <button id="tab-midi" role="tab" data-settings-tab="midi" aria-controls="settings-midi" aria-selected="false" tabindex="-1">MIDI 与输入</button>
+        <button id="tab-about" role="tab" data-settings-tab="about" aria-controls="settings-about" aria-selected="false" tabindex="-1">关于</button>
+      </nav>
+      <div class="preferences-content">
+        <section id="settings-practice" class="preferences-page" role="tabpanel" aria-labelledby="tab-practice">
+          <h3>判定</h3>
+          <label class="preference-row"><span>正确保持</span><span class="preference-control"><input id="holdInput" type="number" value="350" min="100" max="2000" step="50" aria-label="正确保持毫秒"><span class="unit">ms</span></span></label>
+          <label class="preference-row" data-modes="chords"><span>转位</span><select id="voicingSelect"><option value="root">原位</option><option value="1">第一转位</option><option value="2">第二转位</option><option value="mixed">全部转位</option></select></label>
+          <label class="preference-row" data-modes="progression"><span>衔接方式</span><select id="transitionSelect"><option value="connected">保留共同音</option><option value="release">全部松键</option></select></label>
+          <label id="voiceLeadingField" class="preference-row" data-modes="progression"><span>目标配置</span><select id="voiceLeadingSelect"><option value="root">原位</option><option value="smooth">就近转位</option></select></label>
+          <h3>琴键提示</h3>
+          <label class="preference-row"><span>等待时间</span><span class="preference-control"><input id="hintDelayInput" type="number" value="8" min="0" max="120" step="1" aria-label="提示等待秒数"><span class="unit">s</span></span></label>
+          <label id="hintOctaveField" class="preference-row"><span>提示音区</span><select id="hintOctaveSelect" aria-label="提示根音音区"><option value="2">C2 – B2</option><option value="3" selected>C3 – B3</option><option value="4">C4 – B4</option><option value="5">C5 – B5</option></select></label>
+        </section>
+        <section id="settings-display" class="preferences-page" role="tabpanel" aria-labelledby="tab-display" hidden>
+          <h3>主题</h3>
+          <fieldset class="theme-picker"><legend>配色方案</legend><div id="themeOptions" class="theme-options" role="group" aria-label="配色方案"></div></fieldset>
+        </section>
+        <section id="settings-audio" class="preferences-page" role="tabpanel" aria-labelledby="tab-audio" hidden>
+          <h3>钢琴音色</h3>
+          <div id="soundfontField" class="preference-row"><span>音色库</span><div class="preference-control"><span id="soundfontName" class="soundfont-name">—</span><button id="soundfontButton" class="icon" title="更换 SF2 音色" aria-label="更换 SF2 音色"><i data-lucide="folder-open"></i></button></div></div>
+          <label class="preference-row"><span>MIDI 试听</span><input id="monitorToggle" type="checkbox" checked></label>
+          <h3>调音</h3>
+          <label class="preference-row"><span>参考音 A4</span><span class="preference-control"><input id="tuningInput" type="number" value="440" min="400" max="480" aria-label="参考音赫兹"><span class="unit">Hz</span></span></label>
+        </section>
+        <section id="settings-midi" class="preferences-page" role="tabpanel" aria-labelledby="tab-midi" hidden>
+          <h3>MIDI 输入</h3>
+          <label class="preference-row"><span>通道</span><select id="channelSelect"><option value="all">全部通道</option></select></label>
+          <label class="preference-row"><span>排除鼓通道 10</span><input id="drumsToggle" type="checkbox" checked></label>
+          <h3>踏板</h3>
+          <label class="preference-row"><span>计入踏板延音</span><input id="pedalToggle" type="checkbox" checked></label>
+        </section>
+        <section id="settings-about" class="preferences-page about-page" role="tabpanel" aria-labelledby="tab-about" hidden>
+          <div class="about-brand"><img src="icons/app.svg" alt=""><div><strong>和弦镜</strong><span>练琴版</span></div></div>
+          <dl class="about-facts"><div><dt>版本</dt><dd id="aboutVersion">—</dd></div><div><dt>作者</dt><dd>Katuria</dd></div><div><dt>项目仓库</dt><dd><a id="repositoryLink" href="https://github.com/TheycallmeXH/chord-lens-practice" target="_blank" rel="noopener noreferrer">TheycallmeXH / chord-lens-practice<i data-lucide="external-link"></i></a></dd></div></dl>
+          <h3>授权协议</h3>
+          <div id="licenseList" class="license-list"></div>
+          <p class="about-note">项目代码与原创图标采用 MIT；第三方组件及音色库分别遵循各自许可。本项目独立于 Ableton。</p>
+        </section>
+      </div>
+    </div>
   </dialog>
   <dialog id="recordsDialog" class="records-dialog">
     <div class="dialog-heading"><h2>练习记录</h2><div><button id="exportButton" class="icon" title="导出记录" aria-label="导出记录"><i data-lucide="download"></i></button><button class="icon" data-close aria-label="关闭"><i data-lucide="x"></i></button></div></div>
     <div id="savedSessions" class="saved-sessions"></div>
   </dialog>
-  <dialog id="helpDialog">
-    <div class="dialog-heading"><h2>练琴</h2><button class="icon" data-close aria-label="关闭"><i data-lucide="x"></i></button></div>
-    <p>接入 MIDI 键盘后自动接收。保持正确音集，再全部松键进入下一题；踏板音计入时也需释放踏板。部分音先落下可继续补齐，错误仅在松键时计一次。</p>
-    <p>“任意八度”允许八度重复；转位练习同时要求正确低音。“指定音区”按目标实际音高严格匹配。</p>
-    <p>空间键开始 / 暂停；Escape 清音。A W S E D F T G Y H U J K 对应 C4–C5。点击琴键也可练习。</p>
-    <p>声音每次启动默认关闭；节拍器可无声闪拍。开启声音后，MIDI 试听仍由设置单独控制。</p>
-    <p>落键差是当前按住音符的首次触发时间差，力度差是其最大 / 最小 MIDI 力度差。它们不等于节奏评分。</p>
-    <p>和弦识别采用 Tonal 字典及既有和弦镜引擎。情绪只作定性听感参考；没有调性上下文时，候选名称可能存在歧义。练习判定直接比较音高，不受候选命名影响。</p>
-    <p class="muted">记录仅保存在本机，保留最近 100 轮。字体：Jost / 本机 Ableton Sans；中文按字体覆盖范围回退。</p>
+  <dialog id="helpDialog" class="guide-dialog" aria-labelledby="helpTitle">
+    <div class="dialog-heading"><h2 id="helpTitle">练习与识别规则</h2><button class="icon" data-close aria-label="关闭"><i data-lucide="x"></i></button></div>
+    <div class="guide-content">
+      <section><h3>练习判定</h3><dl><div><dt>任意八度</dt><dd>比较音名，允许八度重复；转位题同时检查最低音。</dd></div><div><dt>指定音区</dt><dd>逐个匹配目标实际音高。提示音区指定原位根音八度，转位保留音序。</dd></div><div><dt>正确保持</dt><dd>音符补齐后默认保持 350 ms。部分音先落下可继续补齐；未正确便整组松键，计一次重试。</dd></div><div><dt>和弦衔接</dt><dd>和弦进行默认允许保留共同音；正确后改变按键即可进入下一题。同组按键一直保持，不会重复计分。可在设置改为全部松键；踏板音计入时也需释放。</dd></div></dl></section>
+      <section><h3>内容与提示</h3><p>五级难度支持按类别、单一和弦或本级混合练习。扩展和弦采用 Tonal 字典音集：属十一省略三音，十三省略十一音。就近转位尽量减少相邻目标的声部移动。</p><p>超时提示默认等待 8 秒；暂停不计时，重试不重置，换题重新计时。完成后可重练同一轮，或用序列旁的换组按钮生成新题。</p></section>
+      <section><h3>导入 MIDI</h3><p>支持标准 MIDI Format 0 / 1，可选择伴奏音轨。“同时起音”合并指定毫秒内的新按键；按拍聚合适合分解和弦。鼓通道 10、单音及双音组会跳过，相邻重复配置会合并。</p><p>导入保留原文件音区，预览确认后逐组练习。无法确定和弦名时显示“音集”，判定仍按实际组成音进行。文件在本机解析，不会上传；当前轮按音集判定，不作节奏评分。</p></section>
+      <section><h3>识别边界</h3><p>同一音集可能有多个合理名称；省略音、无根音配置属于推测。练习判定直接比较音高，不受候选命名影响。和弦情绪仅作定性听感参考。</p><p>落键差是当前按住音符的首次触发时间差，力度差是最大与最小 MIDI 力度之差；两者不等于节奏评分。</p></section>
+      <section><h3>输入与声音</h3><p>接入 MIDI 键盘后自动接收。声音与 MIDI 试听每次启动默认开启，可分别关闭。浏览器版本可能需要先点击界面启用音频。</p><dl class="shortcut-list"><div><dt><kbd>Space</kbd></dt><dd>开始 / 暂停</dd></div><div><dt><kbd>Esc</kbd></dt><dd>清音，不记错误</dd></div><div><dt><kbd>A W S E D F T G Y H U J K</kbd></dt><dd>C4 – C5</dd></div></dl><p>记录仅保存在本机，保留最近 100 轮，可导出 JSON。MIDI 文件需在重新打开程序后再次导入。</p></section>
+    </div>
   </dialog>
+  <dialog id="midiImportDialog" class="midi-import-dialog" aria-labelledby="midiImportTitle">
+    <div class="dialog-heading"><h2 id="midiImportTitle">导入 MIDI 练习</h2><button class="icon" data-close aria-label="关闭"><i data-lucide="x"></i></button></div>
+    <div class="midi-file-row"><span id="midiFileName">未选择文件</span><button id="chooseMidiFileButton" class="text-action"><i data-lucide="folder-open"></i>选择文件</button></div>
+    <input id="midiFileInput" type="file" accept=".mid,.midi,audio/midi,audio/x-midi" hidden>
+    <fieldset class="midi-tracks"><legend>练习音轨</legend><div id="midiTrackList" class="midi-track-list"></div></fieldset>
+    <div class="midi-options"><label>提取方式<select id="midiGroupingSelect"><option value="onset">同时起音</option><option value="1">每 1 拍</option><option value="2">每 2 拍</option><option value="4">每 4 拍</option></select></label><label id="midiWindowField">起音间隔<span class="preference-control"><input id="midiWindowInput" type="number" value="80" min="20" max="300" step="10" aria-label="合并起音毫秒"><span class="unit">ms</span></span></label></div>
+    <div id="midiImportStatus" class="midi-import-status" role="status" aria-live="polite">选择要练习的 MIDI 文件</div>
+    <div id="midiPreview" class="midi-preview" aria-label="和弦预览"></div>
+    <div class="midi-import-footer"><span id="midiImportSummary"></span><button id="applyMidiButton" class="primary-action" disabled>用于练习</button></div>
+  </dialog>
+  <dialog id="licenseDialog" class="license-dialog" aria-labelledby="licenseTitle"><div class="dialog-heading"><h2 id="licenseTitle">授权协议</h2><button class="icon" data-close aria-label="关闭"><i data-lucide="x"></i></button></div><pre id="licenseText" tabindex="0"></pre></dialog>
   <script src="../midi-chords/vendor/tonal.min.js"></script>
   <script src="../assets/lucide.min.js"></script>
   <script src="../midi-chords/engine.js"></script>
   <script src="practice.js"></script>
   <script src="piano-audio.js"></script>
+  <script src="app-info.js"></script>
+  <script src="midi-ui.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
