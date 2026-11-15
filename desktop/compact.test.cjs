@@ -7,7 +7,7 @@ const { _electron } = require('playwright');
 (async () => {
   const app = await _electron.launch({
     executablePath:resolve(__dirname, '../dist/和弦镜练琴版/和弦镜练琴版.exe'),
-    args:['--practice-test']
+    args:['--practice-test','--practice-test-no-midi']
   });
   try {
     const page = await app.firstWindow(), errors = [];
@@ -71,9 +71,9 @@ const { _electron } = require('playwright');
     await page.locator('#compactModeButton').click(); await settle();
     assert.equal(await page.locator('#compactView').isVisible(), true);
     assert.equal(await page.locator('.shell').isVisible(), false);
-    assert.deepEqual((await nativeState()).minimum, [380, 260]);
-    assert.equal((await nativeState()).bounds.width, 480);
-    assert.ok(Math.abs((await nativeState()).bounds.height - 280) <= 1, 'Windows DPI rounding stays within one pixel');
+    assert.deepEqual((await nativeState()).minimum, [280, 180]);
+    assert.equal((await nativeState()).bounds.width, 320);
+    assert.ok(Math.abs((await nativeState()).bounds.height - 200) <= 1, 'Windows DPI rounding stays within one pixel');
     assert.equal(await page.locator('#practiceState').textContent(), '已暂停');
     assert.equal(await page.locator('#resetLayoutButton').isVisible(), false);
     await chord([60,64,67]);
@@ -100,8 +100,8 @@ const { _electron } = require('playwright');
     await settle();
     assert.equal((await nativeState()).pinned, false);
     await page.reload(); await page.waitForSelector('#compactView:not([hidden])');
-    assert.equal((await nativeState()).bounds.width, 480, 'reload keeps native view and renderer in sync');
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(380,260));
+    assert.equal((await nativeState()).bounds.width, 320, 'reload keeps native view and renderer in sync');
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(280,180));
     const smallBounds = (await nativeState()).bounds;
     await chord([60,61,63,64,66,67,69,70]);
     await checkFit();
@@ -121,7 +121,7 @@ const { _electron } = require('playwright');
     assert.equal(await page.locator('.inspector').isVisible(), true);
     assert.equal(await page.locator('[data-collapse="target"]').getAttribute('aria-expanded'), 'true');
     await page.locator('#compactModeButton').click(); await settle();
-    assert.ok(Math.abs((await nativeState()).bounds.width - 380) <= 1, 'last compact size is remembered');
+    assert.ok(Math.abs((await nativeState()).bounds.width - 280) <= 1, 'last compact size is remembered');
     await chord([57,60,64]);
     assert.equal(await page.locator('#compactSymbol').textContent(), 'Am');
     await page.locator('#exitCompactButton').click();

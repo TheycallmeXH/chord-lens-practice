@@ -176,21 +176,24 @@ td:first-child { font-size:15px; }td:nth-child(2) { color:var(--accent); }
 .shell.left-hidden { --left-width:0px; }.shell.right-hidden { --right-width:0px; }
 .shell>.sidebar { grid-column:1; grid-row:1; }.shell>.workspace { grid-column:2; grid-row:1; }.shell>.inspector { grid-column:3; grid-row:1; }
 .shell.left-hidden>.sidebar,.shell.right-hidden>.inspector { display:none; }
-.compact-view { height:calc(100% - 43px); padding:12px 22px; display:flex; flex-direction:column; min-width:0; }
-.compact-chord { flex:1; min-height:105px; display:flex; flex-direction:column; justify-content:center; min-width:0; }
-#compactSymbol { height:88px; flex:none; display:flex; align-items:center; font-size:78px; line-height:1; white-space:nowrap; }
-#compactDescription { height:22px; font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.compact-notes { flex:0 0 40px; min-width:0; display:flex; align-items:center; gap:13px; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; white-space:nowrap; font-size:17px; color:var(--cyan); }
+.compact-view { height:calc(100% - 33px); padding:8px 14px; display:flex; flex-direction:column; min-width:0; }
+.compact-chord { flex:1; min-height:74px; display:flex; flex-direction:column; justify-content:center; min-width:0; }
+#compactSymbol { height:56px; flex:none; display:flex; align-items:center; font-size:54px; line-height:1; white-space:nowrap; }
+#compactDescription { height:18px; flex:none; font-size:10px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.compact-notes { flex:0 0 30px; min-width:0; display:flex; align-items:center; gap:10px; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; white-space:nowrap; font-size:14px; color:var(--cyan); }
 .compact-notes span { flex:none; }
-.compact-footer { flex:0 0 33px; display:flex; align-items:center; justify-content:space-between; gap:12px; border-top:1px solid var(--rule); font-size:10px; color:var(--muted); min-width:0; }
+.compact-footer { flex:0 0 25px; display:flex; align-items:center; justify-content:space-between; gap:10px; border-top:1px solid var(--rule); font-size:10px; color:var(--muted); min-width:0; }
 .compact-bass { display:flex; align-items:center; gap:9px; white-space:nowrap; }
 .compact-bass strong { color:var(--ink); font-size:13px; }
 .compact-midi { display:flex; align-items:center; gap:7px; min-width:0; }
 #compactMidiStatus { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 body.compact .transport,body.compact .shell { display:none; }
 body.compact .brand>span,body.compact #resetLayoutButton,body.compact #helpButton,body.compact #settingsButton { display:none; }
-body.compact .titlebar { padding-left:14px; }
-body.compact .brand { gap:7px; font-size:14px; }
+body.compact .titlebar { height:33px; padding-left:10px; }
+body.compact .brand { gap:0; font-size:0; }
+body.compact .brand-icon { width:20px; height:20px; }
+body.compact .title-tools { gap:3px; }
+body.compact .title-tools .icon { width:25px; height:25px; }
 body.compact #toast { bottom:10px; font-size:10px; }
 dialog { width:460px; max-height:85vh; overflow:auto; background:var(--panel); color:var(--ink); border:1px solid var(--outline); border-radius:3px; padding:17px 21px; scrollbar-width:thin; }
 dialog::backdrop { background:var(--backdrop); }

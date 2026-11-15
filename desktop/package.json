@@ -1,7 +1,7 @@
 {
   "name": "chord-lens-practice",
   "productName": "和弦镜练琴版",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Local MIDI piano practice desktop",
   "license": "MIT",

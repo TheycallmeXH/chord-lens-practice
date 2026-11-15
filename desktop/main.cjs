@@ -66,7 +66,7 @@ if (ownsWindow) app.whenReady().then(() => {
     if (event.sender !== window.webContents || !theme) return false;
     nativeTheme.themeSource = theme.light ? 'light' : 'dark';
     window.setBackgroundColor(theme.background);
-    window.setTitleBarOverlay({color:theme.title,symbolColor:theme.symbol,height:42});
+    window.setTitleBarOverlay({color:theme.title,symbolColor:theme.symbol,height:compact?32:42});
     return true;
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -99,8 +99,8 @@ if (ownsWindow) app.whenReady().then(() => {
       fullBounds = window.getNormalBounds(); fullMaximized = window.isMaximized();
       if (fullMaximized) window.unmaximize();
       const area = screen.getDisplayMatching(window.getBounds()).workArea;
-      const bounds = compactBounds || { ...window.getBounds(), width:480, height:280 };
-      window.setMinimumSize(380, 260);
+      const bounds = compactBounds || { ...window.getBounds(), width:320, height:200 };
+      window.setMinimumSize(280, 180);
       window.setBounds({
         width:Math.min(bounds.width, area.width), height:Math.min(bounds.height, area.height),
         x:Math.max(area.x, Math.min(bounds.x, area.x + area.width - bounds.width)),
@@ -114,6 +114,7 @@ if (ownsWindow) app.whenReady().then(() => {
       if (fullMaximized) window.maximize();
     }
     compact = value;
+    window.setTitleBarOverlay({height:compact?32:42});
     return compact;
   });
   ipcMain.handle('practice:export', async (event, data) => {
