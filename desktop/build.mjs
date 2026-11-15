@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildIcons, brandExecutable } from './icons.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
+await import('./vendor-audio.mjs');
 const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
 const exists = file => access(file).then(() => true, () => false);
 const localFonts = !process.argv.includes('--public') &&
@@ -18,7 +19,7 @@ const app = path.join(destination, 'resources/app');
 await rm(app, {recursive:true,force:true});
 await mkdir(path.join(app, 'desktop'), { recursive: true });
 await cp(path.join(root, 'icons'), path.join(app, 'desktop/icons'), { recursive:true });
-for (const file of ['main.cjs', 'preload.cjs', 'index.html', 'style.css', 'themes.css', 'themes.js', 'renderer.js', 'practice.js']) {
+for (const file of ['main.cjs', 'preload.cjs', 'soundfont.cjs', 'piano-audio.js', 'index.html', 'style.css', 'themes.css', 'themes.js', 'renderer.js', 'practice.js']) {
   await cp(path.join(root, file), path.join(app, 'desktop', file));
 }
 for (const file of ['engine.js', 'vendor/tonal.min.js', 'vendor/tonal-LICENSE.txt',
@@ -27,6 +28,9 @@ for (const file of ['engine.js', 'vendor/tonal.min.js', 'vendor/tonal-LICENSE.tx
   await cp(path.join(root, '../midi-chords', file), path.join(app, 'midi-chords', file));
 }
 await mkdir(path.join(app, 'assets'), { recursive: true });
+await cp(path.join(root,'../assets/synth'),path.join(app,'assets/synth'),{recursive:true});
+await cp(path.join(root,'../soundfonts'),path.join(app,'soundfonts'),{recursive:true,filter:source=>
+  !(process.argv.includes('--public') && path.basename(source)==='Equinox_Grand_Pianos.sf2')});
 for (const file of ['lucide.min.js', 'lucide-LICENSE.txt', ...(!localFonts ? ['Jost.ttf','Jost-LICENSE.txt'] : [])]) {
   await cp(path.join(root, '../assets', file), path.join(app, 'assets', file));
 }

@@ -1,5 +1,6 @@
 const { app, BrowserWindow, session, ipcMain, dialog, Menu, screen, nativeTheme } = require('electron');
 const themes = require('./themes.js');
+const {createSoundfontStore} = require('./soundfont.cjs');
 const { join } = require('node:path');
 const { writeFile } = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
@@ -19,6 +20,7 @@ app.on('second-instance', () => {
 
 if (ownsWindow) app.whenReady().then(() => {
   const trustedMidi = (contents, permission) => {
+    if(testMode && process.argv.includes('--practice-test-no-midi')) return false;
     // Chromium also routes sysex:false requests through the midiSysex permission.
     return contents === window?.webContents && contents.getURL().split('#')[0] === pageURL &&
       ['midi', 'midiSysex'].includes(permission);
@@ -42,6 +44,23 @@ if (ownsWindow) app.whenReady().then(() => {
     }
   });
   window.once('ready-to-show', () => { if (!testMode) window.show(); });
+  const soundfont=createSoundfontStore(join(__dirname,'..'),app.getPath('userData'));
+  ipcMain.handle('practice:soundfont-info',event=>{
+    if(event.sender!==window.webContents) return null;
+    return soundfont.info();
+  });
+  ipcMain.handle('practice:soundfont-load',event=>{
+    if(event.sender!==window.webContents) throw new Error('无效的音色请求');
+    return soundfont.load();
+  });
+  ipcMain.handle('practice:soundfont-choose',async event=>{
+    if(event.sender!==window.webContents) return null;
+    const result=await dialog.showOpenDialog(window,{
+      title:'选择钢琴音色',properties:['openFile'],filters:[{name:'SoundFont',extensions:['sf2']}]
+    });
+    if(result.canceled || !result.filePaths[0]) return null;
+    return soundfont.choose(result.filePaths[0]);
+  });
   ipcMain.handle('practice:theme', (event, id) => {
     const theme = themes.find(id);
     if (event.sender !== window.webContents || !theme) return false;

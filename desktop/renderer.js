@@ -21,7 +21,7 @@
   let notes = [], analysis = recognizer.analyze([]), chosen = null, selectedId = null, octave = 3, intervalMode = 'adjacent';
   let mode = 'chords', deck, run = null, sessionMeta, recordedRun = null, latestEvent = '', analysisTimer;
   let firstAnalysisAt = 0, bpm = 80, beats = 4, metro = false, beatStart = 0, nextBeat = 0, lastVisualBeat = -1;
-  let sound = false, audio, master, tuning = 440, audioGeneration = 0;
+  let sound = false, audio, master, piano, replacingSoundfont = false, tuning = 440, audioGeneration = 0;
   let compact = false, switchingView = false;
   let theme = PracticeThemes.find(document.documentElement.dataset.theme) || PracticeThemes.choices[0];
   let tickTimer = null, feedbackKey = '', analysisKey = '', noteStateKey = '';
@@ -421,6 +421,9 @@
   function handleMessage(source, data) {
     const midi = data[1], attack = (data[0] & 240) === 144 && data[2] > 0;
     if (!input.message(source, data)) return;
+    if(attack && voices.has(midi) && (source.startsWith('midi:') ? $('#monitorToggle').checked : true)) {
+      stopVoice(voices.get(midi));voices.delete(midi);
+    }
     if (attack) onsets.set(`${source}:${data[0] & 15}:${midi}`, { source, channel:data[0] & 15, midi, time:clock() });
     refreshNotes(true);
   }
@@ -475,6 +478,7 @@
     fitSymbols(); renderIntervals(); renderFifths();
   }
   function clearInput() {
+    piano?.silence();previewVoices.forEach(stopVoice);previewVoices.clear();
     input.clear(); onsets.clear(); pointers.clear(); computerDown.clear();
     run?.cancelAttempt(); refreshNotes();
   }
@@ -543,13 +547,17 @@
   async function ensureAudio() {
     if (!sound) return;
     if (!audio) {
-      audio = new AudioContext(); master = audio.createGain(); master.gain.value = .26;
+      audio = new AudioContext({latencyHint:'interactive'}); master = audio.createGain(); master.gain.value = sound ? .65 : 0;
       const compressor = audio.createDynamicsCompressor(); compressor.threshold.value = -14; compressor.ratio.value = 8;
       master.connect(compressor); compressor.connect(audio.destination);
+      if(window.practiceDesktop) piano=new SoundfontPiano(audio,master,()=>window.practiceDesktop.soundfontLoad());
     }
     if (audio.state !== 'running') await audio.resume();
+    await piano?.ready();
+    piano?.tune(tuning);
   }
-  function makeVoice(midi, velocity = 88) {
+  function makeVoice(midi, velocity = 88, preview = false) {
+    if(piano) return piano.start(midi,velocity,preview?1:0);
     const oscillator = audio.createOscillator(), gain = audio.createGain();
     oscillator.type = 'triangle'; oscillator.frequency.value = tuning * 2 ** ((midi - 69) / 12);
     gain.gain.setValueAtTime(0, audio.currentTime); gain.gain.linearRampToValueAtTime(velocity / 127 * .14, audio.currentTime + .015);
@@ -558,12 +566,13 @@
     return { oscillator, gain, stopped:false };
   }
   function stopVoice(voice) {
+    if(voice.stop) {voice.stop();return;}
     if (voice.stopped) return; voice.stopped = true;
     voice.gain.gain.cancelScheduledValues(audio.currentTime); voice.gain.gain.setTargetAtTime(0, audio.currentTime, .025);
     voice.oscillator.stop(audio.currentTime + .16);
   }
   function syncAudio() {
-    if (!sound || !audio || audio.state !== 'running') return;
+    if (!sound || replacingSoundfont || !audio || audio.state !== 'running' || piano && !piano.synth) return;
     const audible = notes.filter(note => $('#monitorToggle').checked || note.sources.some(source => !source.startsWith('midi:')));
     voices.forEach((voice, midi) => { if (!audible.some(n => n.midi === midi)) { stopVoice(voice); voices.delete(midi); } });
     audible.forEach(note => { if (!voices.has(note.midi)) voices.set(note.midi, makeVoice(note.midi, note.velocity)); });
@@ -579,17 +588,20 @@
     $('#soundButton').title = sound ? '关闭声音' : '开启声音';
     $('#soundButton').setAttribute('aria-label', $('#soundButton').title);
     $('#soundButton').innerHTML = `<i data-lucide="${sound ? 'volume-2' : 'volume-x'}"></i>`;
-    if (audio) master.gain.setValueAtTime(sound ? .26 : 0, audio.currentTime);
-    if (!sound) { voices.forEach(stopVoice); voices.clear(); previewVoices.forEach(stopVoice); previewVoices.clear(); stopMetroVoices(); }
+    if (audio) master.gain.setValueAtTime(sound ? .65 : 0, audio.currentTime);
+    if (!sound) {
+      voices.forEach(stopVoice);voices.clear();previewVoices.forEach(stopVoice);previewVoices.clear();piano?.silence();stopMetroVoices();
+      setTimeout(()=>{if(!sound&&!replacingSoundfont)audio?.suspend().catch(error=>toast(error.message));},160);
+    }
     else unlockAudio();
     renderControls();
   }
   async function previewTarget() {
     if (!sound || mode === 'free') return;
     const generation = ++audioGeneration;
-    await ensureAudio(); if (!sound || generation !== audioGeneration) return;
+    await ensureAudio(); if (!sound || replacingSoundfont || generation !== audioGeneration) return;
     previewVoices.forEach(stopVoice); previewVoices.clear();
-    for (const midi of target().notes) previewVoices.add(makeVoice(midi));
+    for (const midi of target().notes) previewVoices.add(makeVoice(midi,88,true));
     const group = [...previewVoices];
     setTimeout(() => group.forEach(voice => { stopVoice(voice); previewVoices.delete(voice); }), 1100);
   }
@@ -670,9 +682,36 @@
   };
   $('#tuningInput').onchange = event => {
     tuning = Math.max(400, Math.min(480, Number(event.target.value) || 440)); event.target.value = tuning;
-    voices.forEach((voice, midi) => voice.oscillator.frequency.setValueAtTime(tuning * 2 ** ((midi - 69) / 12), audio.currentTime)); analyze();
+    piano?.tune(tuning);
+    if(!piano) voices.forEach((voice, midi) => voice.oscillator.frequency.setValueAtTime(tuning * 2 ** ((midi - 69) / 12), audio.currentTime));
+    analyze();
   };
   $('#soundButton').onclick = () => setSound(!sound);
+  $('#soundfontField').hidden=!window.practiceDesktop;
+  async function showSoundfont(info) {
+    if(!info) return;
+    $('#soundfontName').textContent=info.name;$('#soundfontName').title=info.name;
+  }
+  window.practiceDesktop?.soundfontInfo().then(showSoundfont).catch(error=>toast(error.message));
+  $('#soundfontButton').onclick=async()=>{
+    const button=$('#soundfontButton');button.disabled=true;
+    try {
+      const info=await window.practiceDesktop.soundfontChoose();
+      if(!info) return;
+      audioGeneration++;
+      await showSoundfont(info);
+      if(piano) {
+        replacingSoundfont=true;
+        voices.forEach(stopVoice);voices.clear();previewVoices.forEach(stopVoice);previewVoices.clear();piano.silence();
+        if(audio.state!=='running')await audio.resume();
+        await piano.reload();
+      }
+    } catch(error) {toast(error.message);}
+    finally {
+      replacingSoundfont=false;button.disabled=false;syncAudio();
+      if(!sound)audio?.suspend().catch(error=>toast(error.message));
+    }
+  };
   $('#previewButton').onclick = () => previewTarget().catch(error => toast(error.message));
   $('#metroButton').onclick = () => {
     metro = !metro; $('#metroButton').setAttribute('aria-pressed', String(metro)); resetMetro(); if (metro) unlockAudio(); renderFeedback();
@@ -752,6 +791,7 @@
   });
   window.addEventListener('blur', releaseMomentary);
   window.addEventListener('beforeunload', () => {
+    piano?.destroy();
     if (busy()) { run.finish(clock()); saveRun(); }
   });
   window.addEventListener('resize', () => { fitSymbols(); renderIntervals(); });

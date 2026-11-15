@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'none'">
   <title>和弦镜 · 练琴</title>
   <link rel="icon" href="icons/app.ico">
   <script src="themes.js"></script>
@@ -120,6 +120,7 @@
   <dialog id="settingsDialog">
     <div class="dialog-heading"><h2>设置</h2><button class="icon" data-close aria-label="关闭"><i data-lucide="x"></i></button></div>
     <fieldset class="theme-picker"><legend>配色</legend><div id="themeOptions" class="theme-options" role="group" aria-label="配色方案"></div></fieldset>
+    <label id="soundfontField">钢琴音色<span id="soundfontName" class="soundfont-name">—</span><button id="soundfontButton" class="icon" title="更换 SF2 音色" aria-label="更换 SF2 音色"><i data-lucide="folder-open"></i></button></label>
     <label>MIDI 通道<select id="channelSelect"><option value="all">全部通道</option></select></label>
     <label class="check"><span>排除鼓通道 10</span><input id="drumsToggle" type="checkbox" checked></label>
     <label class="check"><span>计入踏板延音</span><input id="pedalToggle" type="checkbox" checked></label>
@@ -145,6 +146,7 @@
   <script src="../assets/lucide.min.js"></script>
   <script src="../midi-chords/engine.js"></script>
   <script src="practice.js"></script>
+  <script src="piano-audio.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

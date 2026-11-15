@@ -197,6 +197,7 @@ dialog::backdrop { background:var(--backdrop); }
 .dialog-heading { height:30px; display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }.dialog-heading h2 { font-size:15px; }
 dialog>label { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:49px; border-bottom:1px solid var(--rule); font-size:11px; }
 dialog>label>input[type=number] { margin-left:auto; }
+.soundfont-name { margin-left:auto; min-width:0; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:10px; }
 dialog p { font-size:11px; line-height:1.9; color:var(--soft); margin:12px 0; }
 .theme-picker { border:0; border-bottom:1px solid var(--rule); padding:0 0 15px; margin:0; min-width:0; }
 .theme-picker legend { padding:0; margin-bottom:10px; font-size:11px; color:var(--muted); }
