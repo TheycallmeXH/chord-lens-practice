@@ -366,15 +366,30 @@
     }).join('') : '<div class="muted">—</div>';
     $('#exportButton').disabled = !saved.sessions.length;
   }
+  async function midiDeadline(promise,message) {
+    let timer;
+    try {
+      return await Promise.race([promise,new Promise((_,reject)=>{
+        timer=setTimeout(()=>{
+          const error=new Error(message);error.name='TimeoutError';reject(error);
+        },5000);
+      })]);
+    } finally {clearTimeout(timer);}
+  }
   async function connect() {
     if (connecting) return;
     if (!navigator.requestMIDIAccess) { setMidiStatus('MIDI 不可用', 'problem'); return; }
+    if(access) {
+      failedPorts.forEach(id=>{ports.delete(id);portAttempts.delete(id);});failedPorts.clear();
+      refreshDevices();return;
+    }
     connecting = true; $('#connectButton').disabled = true;
+    setMidiStatus('MIDI 连接中');
     try {
-      access = await navigator.requestMIDIAccess({ sysex:false });
+      access = await midiDeadline(navigator.requestMIDIAccess({sysex:false}),'Windows MIDI 服务未响应，请重新连接键盘后重试');
       failedPorts.forEach(id => { ports.delete(id); portAttempts.delete(id); }); failedPorts.clear();
       access.onstatechange = refreshDevices; refreshDevices();
-    } catch (error) { setMidiStatus('MIDI 未授权', 'problem'); toast(error.message); }
+    } catch (error) { setMidiStatus(error.name==='TimeoutError'?'MIDI 连接超时':'MIDI 未授权', 'problem'); toast(error.message); }
     finally { connecting = false; $('#connectButton').disabled = false; }
   }
   function setMidiStatus(text, state = '') {
@@ -409,7 +424,7 @@
       if (!ports.has(port.id)) {
         ports.set(port.id, port);
         const attempt = Symbol(); portAttempts.set(port.id,attempt);
-        Promise.resolve().then(() => port.open()).catch(error => {
+        Promise.resolve().then(() => midiDeadline(port.open(),'MIDI 设备未响应，请重新连接后重试')).catch(error => {
           if (portAttempts.get(port.id) !== attempt || ports.get(port.id) !== port || port.state !== 'connected') return;
           failedPorts.add(port.id); port.onmidimessage = null; input.clear(`midi:${port.id}`);
           refreshNotes(); setMidiStatus('MIDI 打开失败', 'problem'); toast(error.message);
