@@ -38,7 +38,7 @@
       if(!this.worklet) this.worklet=this.context.audioWorklet.addModule('../assets/synth/processor.min.js')
         .catch(error=>{this.worklet=null;throw error;});
       await this.worklet;
-      const synth=new WorkletSynthesizer(this.context,{eventsEnabled:false,decodedSampleBudget:128*1024*1024});
+      const synth=new WorkletSynthesizer(this.context,{eventsEnabled:false,decodedSampleBudget:32*1024*1024});
       try {
         synth.connect(this.destination);
         await bounded(synth.isReady,'钢琴引擎初始化超时');
@@ -69,9 +69,11 @@
       return {stop:()=>{if(!stopped){stopped=true;if(this.synth===synth)synth.noteOff(channel,midi);}}};
     }
     tune(hz) {
+      if(this.appliedTuning===hz && this.appliedSynth===this.synth) return;
       this.tuning=hz;
       const cents=1200*Math.log2(hz/440);
       for(const channel of [0,1]) this.synth?.midiChannels[channel].setSystemParameter('fineTune',cents);
+      this.appliedTuning=hz;this.appliedSynth=this.synth;
     }
     silence() {this.synth?.stopAll(true);}
     destroy() {this.synth?.destroy();this.synth=null;}

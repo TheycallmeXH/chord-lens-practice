@@ -1,7 +1,7 @@
 {
   "name": "chord-lens-practice",
   "productName": "和弦镜练琴版",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "private": true,
   "description": "Local MIDI piano practice desktop",
   "license": "MIT",
@@ -12,6 +12,8 @@
     "test": "node --test practice.test.cjs midi-import.test.cjs ../midi-chords/engine.test.cjs",
     "test:ui": "node audit.test.cjs && node panels.test.cjs && node practice-ui.test.cjs && node progression-ui.test.cjs",
     "test:themes": "node themes.test.cjs",
+    "test:custom-themes": "node custom-themes.test.cjs",
+    "test:performance": "node performance.test.cjs",
     "test:soundfont": "node soundfont.test.cjs",
     "test:midi": "node midi-connection.test.cjs",
     "test:midi:native": "node midi-native.test.cjs",

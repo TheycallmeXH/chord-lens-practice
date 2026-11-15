@@ -1,5 +1,6 @@
 const {open,readFile,writeFile,stat} = require('node:fs/promises');
 const {join,basename} = require('node:path');
+const {pathToFileURL} = require('node:url');
 
 function createSoundfontStore(appRoot,userData) {
   const preference = join(userData,'soundfont.json');
@@ -31,15 +32,10 @@ function createSoundfontStore(appRoot,userData) {
     throw new Error('未找到钢琴音色，请在设置中选择 SF2 文件');
   }
   return {
+    async url() {return pathToFileURL(await source()).href;},
     async info() {
       try {return {...await inspect(await source()),available:true};}
       catch {return {name:'选择 SF2',available:false};}
-    },
-    async load() {
-      const file=await source();
-      await inspect(file);
-      const bytes=await readFile(file);
-      return bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);
     },
     async choose(file) {
       const info=await inspect(file);

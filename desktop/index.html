@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src piano://soundfont">
   <title>和弦镜 · 练琴</title>
   <link rel="icon" href="icons/app.ico">
   <script src="themes.js"></script>
@@ -144,7 +144,26 @@
         </section>
         <section id="settings-display" class="preferences-page" role="tabpanel" aria-labelledby="tab-display" hidden>
           <h3>主题</h3>
-          <fieldset class="theme-picker"><legend>配色方案</legend><div id="themeOptions" class="theme-options" role="group" aria-label="配色方案"></div></fieldset>
+          <div class="appearance-tabs" role="tablist" aria-label="配色类型">
+            <button id="themePresetTab" role="tab" aria-selected="true" aria-controls="themePresetPanel" data-appearance-tab="preset">预设</button>
+            <button id="themeCustomTab" role="tab" aria-selected="false" aria-controls="customThemeEditor" tabindex="-1" data-appearance-tab="custom">自定义</button>
+          </div>
+          <div id="themePresetPanel" role="tabpanel" aria-labelledby="themePresetTab">
+            <fieldset class="theme-picker"><legend class="visually-hidden">配色方案</legend><div id="themeOptions" class="theme-options" role="group" aria-label="配色方案"></div></fieldset>
+          </div>
+          <div id="customThemeEditor" role="tabpanel" aria-labelledby="themeCustomTab" hidden>
+          <div class="custom-theme-toolbar">
+            <select id="customThemeSelect" aria-label="已保存的自定义配色"><option value="">未保存的配色</option></select>
+            <button id="newThemeButton" class="icon" title="复制当前配色" aria-label="复制当前配色"><i data-lucide="copy-plus"></i></button>
+            <button id="deleteThemeButton" class="icon" title="删除配色" aria-label="删除配色" disabled><i data-lucide="trash-2"></i></button>
+          </div>
+          <div id="customColorFields" class="custom-color-fields"></div>
+          <div class="custom-theme-save">
+            <input id="customThemeName" type="text" maxlength="32" placeholder="配色名称" aria-label="配色名称">
+            <span id="themeSaveState" role="status"></span>
+            <button id="saveThemeButton" class="icon" title="保存配色" aria-label="保存配色"><i data-lucide="save"></i></button>
+          </div>
+          </div>
         </section>
         <section id="settings-audio" class="preferences-page" role="tabpanel" aria-labelledby="tab-audio" hidden>
           <h3>钢琴音色</h3>

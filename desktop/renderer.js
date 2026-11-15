@@ -23,11 +23,13 @@
   let mode = 'chords', deck, run = null, sessionMeta, recordedRun = null, latestEvent = '', analysisTimer;
   let firstAnalysisAt = 0, bpm = 80, beats = 4, metro = false, beatStart = 0, nextBeat = 0, lastVisualBeat = -1;
   let sound = true, audio, master, piano, replacingSoundfont = false, tuning = 440, audioGeneration = 0;
+  let audioSleepTimer, audioSleeping, audioMeter, audioSamples;
   let compact = false, switchingView = false;
   let hintVisible = false, hintKey = '', settingsTab = 'practice';
   let imported = null;
   const isImported = () => mode === 'progression' && $('#progressionSelect').value === 'imported' && imported;
   let theme = PracticeThemes.find(document.documentElement.dataset.theme) || PracticeThemes.choices[0];
+  let committedThemeId=theme.id, themeDraft, themeDirty=false;
   let tickTimer = null, feedbackKey = '', analysisKey = '', noteStateKey = '';
   const voices = new Map(), previewVoices = new Set(), metroVoices = new Set(), onsets = new Map(), computerDown = new Set(), pointers = new Map(), ports = new Map(), failedPorts = new Set();
   const portAttempts = new Map();
@@ -45,7 +47,7 @@
           ['durationMs','correct','wrong','skipped','count'].every(key => Number.isFinite(item[key]) && item[key] >= 0) &&
           (item.key === 'all' || Number.isInteger(Number(item.key)) && Number(item.key) >= 0 && Number(item.key) < 12);
         saved = { sessions:Array.isArray(data.sessions) ? data.sessions.filter(valid).slice(0,100) : [],
-          config:object(data.config), layout:object(data.layout) };
+          config:object(data.config), layout:object(data.layout), customThemes:PracticeThemes.setCustom(data.customThemes) };
       }
     } catch { toast('练习记录读取失败'); }
   }
@@ -62,7 +64,7 @@
       voiceLeading:$('#voiceLeadingSelect').value,
       level:Number($('#levelSelect').value), quality:$('#qualitySelect').value, voicing:$('#voicingSelect').value,
       octave:Number($('#hintOctaveSelect').value), hintDelay:Number($('#hintDelayInput').value),
-      hints:$('#hintsToggle').checked, holdMs:Number($('#holdInput').value), theme:theme.id
+      hints:$('#hintsToggle').checked, holdMs:Number($('#holdInput').value), theme:committedThemeId
     };
   }
   function persistConfig() { saved.config = config(); saveStorage(); }
@@ -89,17 +91,106 @@
   function applyTheme(id, persist = true) {
     theme = PracticeThemes.apply(id);
     $$('[data-theme-value]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.themeValue === theme.id)));
-    window.practiceDesktop?.theme(theme.id).catch(error => toast(error.message));
-    if (persist) persistConfig();
+    window.practiceDesktop?.theme(theme.colors ? {id:theme.id,label:theme.label,colors:theme.colors} : theme.id).catch(error => toast(error.message));
+    if (persist) {committedThemeId=theme.id;persistConfig();}
+  }
+  function renderCustomThemes() {
+    $('#customThemeSelect').replaceChildren(new Option('未保存的配色',''),
+      ...(saved.customThemes || []).map(item=>new Option(item.label,item.id)));
+    $('#customThemeSelect').value=(saved.customThemes || []).some(item=>item.id===themeDraft?.id) ? themeDraft.id : '';
+    $('#deleteThemeButton').disabled=!$('#customThemeSelect').value;
+  }
+  function editTheme(item=theme) {
+    const css=getComputedStyle(document.documentElement);
+    themeDraft=item.colors ? {id:item.id,label:item.label,colors:{...item.colors}} : {
+      id:'custom-'+crypto.randomUUID(),label:'',colors:Object.fromEntries(PracticeThemes.fields.map(([key])=>[key,css.getPropertyValue('--'+key).trim()]))
+    };
+    themeDirty=false;
+    $('#customThemeName').value=themeDraft.label;
+    for(const [key] of PracticeThemes.fields) {
+      $('#color-'+key).value=themeDraft.colors[key];
+      $('#hex-'+key).value=themeDraft.colors[key];
+      $('#hex-'+key).setAttribute('aria-invalid','false');
+    }
+    renderCustomThemes();updateThemeSaveState();
+  }
+  function updateThemeSaveState() {
+    const invalid=$$('#customColorFields [aria-invalid="true"]').length>0;
+    $('#saveThemeButton').disabled=invalid || !$('#customThemeName').value.trim() || !themeDirty;
+    $('#themeSaveState').textContent=invalid ? '色值无效' : themeDirty ? '未保存' : themeDraft.label ? '已保存' : '';
+  }
+  function writeThemeChanges(items,id) {
+    const next={...saved,customThemes:items,config:{...config(),theme:id}};
+    try {localStorage.setItem(storageKey,JSON.stringify(next));}
+    catch {toast('配色未能保存');return false;}
+    saved=next;PracticeThemes.setCustom(items);committedThemeId=id;return true;
   }
   function setupThemes() {
+    $$('[data-appearance-tab]').forEach(button=>{
+      button.onclick=()=>$$('[data-appearance-tab]').forEach(item=>{
+        const selected=item===button;item.setAttribute('aria-selected',String(selected));item.tabIndex=selected?0:-1;
+        $('#'+item.getAttribute('aria-controls')).hidden=!selected;
+      });
+      button.onkeydown=event=>{
+        if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) {
+          event.preventDefault();
+          const buttons=$$('[data-appearance-tab]'),other=['Home','End'].includes(event.key)?buttons[event.key==='Home'?0:1]:buttons.find(v=>v!==button);
+          other.click();other.focus();
+        }
+      };
+    });
     $('#themeOptions').innerHTML = PracticeThemes.choices.map(item =>
       `<button type="button" class="theme-option" data-theme-value="${item.id}" aria-pressed="false" title="${escape(item.label)}"><span class="theme-swatches" aria-hidden="true">${item.swatches.map(color => `<i style="background:${color}"></i>`).join('')}</span>${escape(item.label)}<i class="theme-check" data-lucide="check" aria-hidden="true"></i></button>`).join('');
     $('#themeOptions').onclick = event => {
       const button = event.target.closest('[data-theme-value]');
-      if (button) applyTheme(button.dataset.themeValue);
+      if (button) {applyTheme(button.dataset.themeValue);editTheme();}
     };
+    $('#customColorFields').innerHTML=PracticeThemes.fields.map(([key,label])=>
+      `<div class="custom-color"><label for="color-${key}">${label}</label><input id="color-${key}" type="color" data-color="${key}" aria-label="${label}颜色"><input id="hex-${key}" type="text" data-hex="${key}" aria-label="${label}色值" maxlength="7" spellcheck="false"></div>`).join('');
+    $('#customColorFields').oninput=event=>{
+      const key=event.target.dataset.color || event.target.dataset.hex;
+      if(!key) return;
+      const value=event.target.value, valid=/^#[a-f\d]{6}$/i.test(value);
+      $('#hex-'+key).setAttribute('aria-invalid',String(!valid));
+      if(valid) {
+        themeDraft.colors[key]=value.toLowerCase();
+        $('#color-'+key).value=value;$('#hex-'+key).value=value;
+        applyTheme({...themeDraft,label:$('#customThemeName').value.trim() || '自定义'},false);
+      }
+      themeDirty=true;updateThemeSaveState();
+    };
+    $('#customThemeName').oninput=()=>{themeDirty=true;updateThemeSaveState();};
+    $('#newThemeButton').onclick=()=>{
+      const current=theme;editTheme({});
+      themeDraft.label=(current.label+' 自定义').slice(0,32);$('#customThemeName').value=themeDraft.label;
+      themeDirty=true;updateThemeSaveState();$('#customThemeName').focus();$('#customThemeName').select();
+    };
+    $('#customThemeSelect').onchange=event=>{
+      if(!event.target.value) {editTheme({});return;}
+      applyTheme(event.target.value);editTheme();
+    };
+    $('#saveThemeButton').onclick=()=>{
+      themeDraft.label=$('#customThemeName').value.trim();
+      const item=PracticeThemes.normalize(themeDraft);
+      if(!item || $('#saveThemeButton').disabled) return;
+      const items=[...(saved.customThemes || [])],index=items.findIndex(v=>v.id===item.id);
+      if(index<0 && items.length>=24) {toast('最多保存 24 套配色');return;}
+      if(index<0) items.push(item);else items[index]=item;
+      if(writeThemeChanges(items,item.id)) {applyTheme(item.id,false);editTheme();toast('配色已保存');}
+    };
+    $('#deleteThemeButton').onclick=()=>{
+      const id=$('#customThemeSelect').value;
+      if(!id) return;
+      if(writeThemeChanges((saved.customThemes || []).filter(v=>v.id!==id),'live-dark')) {
+        applyTheme('live-dark',false);editTheme();toast('配色已删除');
+      }
+    };
+    $('#settingsDialog').addEventListener('close',()=>{
+      if(theme.id!==committedThemeId || themeDirty) applyTheme(committedThemeId,false);
+      editTheme();
+    });
     applyTheme(theme.id,false);
+    editTheme();
   }
   function setupPanels() {
     const restored = saved.layout;
@@ -620,12 +711,19 @@
   }
   async function ensureAudio() {
     if (!sound) return;
+    clearTimeout(audioSleepTimer);audioSleepTimer=null;
     if (!audio) {
       audio = new AudioContext({latencyHint:'interactive'}); master = audio.createGain(); master.gain.value = sound ? .65 : 0;
       const compressor = audio.createDynamicsCompressor(); compressor.threshold.value = -14; compressor.ratio.value = 8;
-      master.connect(compressor); compressor.connect(audio.destination);
-      if(window.practiceDesktop) piano=new SoundfontPiano(audio,master,()=>window.practiceDesktop.soundfontLoad());
+      audioMeter=audio.createAnalyser();audioMeter.fftSize=512;audioSamples=new Float32Array(512);
+      master.connect(compressor);compressor.connect(audioMeter);audioMeter.connect(audio.destination);
+      if(window.practiceDesktop) piano=new SoundfontPiano(audio,master,async()=>{
+        const response=await fetch(await window.practiceDesktop.soundfontURL());
+        if(!response.ok) throw new Error('钢琴音色读取失败');
+        return response.arrayBuffer();
+      });
     }
+    await audioSleeping;
     if (audio.state !== 'running') await audio.resume();
     await piano?.ready();
     piano?.tune(tuning);
@@ -650,6 +748,23 @@
     const audible = notes.filter(note => $('#monitorToggle').checked || note.sources.some(source => !source.startsWith('midi:')));
     voices.forEach((voice, midi) => { if (!audible.some(n => n.midi === midi)) { stopVoice(voice); voices.delete(midi); } });
     audible.forEach(note => { if (!voices.has(note.midi)) voices.set(note.midi, makeVoice(note.midi, note.velocity)); });
+    scheduleAudioSleep();
+  }
+  function scheduleAudioSleep() {
+    if(!audio || audioSleepTimer || replacingSoundfont || piano?.loading ||
+      voices.size || previewVoices.size || metro && sound) return;
+    // Let the piano release naturally, then stop processing silent audio blocks.
+    function sleepWhenQuiet() {
+      audioSleepTimer=null;
+      if(voices.size || previewVoices.size || metro && sound || replacingSoundfont || piano?.loading) return;
+      audioMeter.getFloatTimeDomainData(audioSamples);
+      if(audio.state==='running' && audioSamples.some(sample=>Math.abs(sample)>.0001)) {
+        audioSleepTimer=setTimeout(sleepWhenQuiet,300);return;
+      }
+      piano?.silence();
+      audioSleeping=audio.suspend().catch(error=>toast(error.message)).finally(()=>{audioSleeping=null;});
+    }
+    audioSleepTimer=setTimeout(sleepWhenQuiet,3000);
   }
   function unlockAudio() {
     if (!sound) return;
@@ -677,7 +792,7 @@
     previewVoices.forEach(stopVoice); previewVoices.clear();
     for (const midi of target().notes) previewVoices.add(makeVoice(midi,88,true));
     const group = [...previewVoices];
-    setTimeout(() => group.forEach(voice => { stopVoice(voice); previewVoices.delete(voice); }), 1100);
+    setTimeout(() => {group.forEach(voice => { stopVoice(voice); previewVoices.delete(voice); });scheduleAudioSleep();}, 1100);
   }
   function renderBeats() { $('#beatLights').innerHTML = Array.from({length:beats}, (_, i) => `<i class="${i === 0 ? 'accent' : ''}"></i>`).join(''); }
   function stopMetroVoices() { metroVoices.forEach(oscillator => oscillator.stop()); metroVoices.clear(); }
@@ -847,11 +962,12 @@
     finally {
       replacingSoundfont=false;button.disabled=false;syncAudio();
       if(!sound)audio?.suspend().catch(error=>toast(error.message));
+      else scheduleAudioSleep();
     }
   };
   $('#previewButton').onclick = () => previewTarget().catch(error => toast(error.message));
   $('#metroButton').onclick = () => {
-    metro = !metro; $('#metroButton').setAttribute('aria-pressed', String(metro)); resetMetro(); if (metro) unlockAudio(); renderFeedback();
+    metro = !metro; $('#metroButton').setAttribute('aria-pressed', String(metro)); resetMetro(); if (metro) unlockAudio(); else scheduleAudioSleep(); renderFeedback();
   };
   $('#bpmInput').onchange = event => { bpm = Math.max(40, Math.min(240, Number(event.target.value) || 80)); event.target.value = bpm; resetMetro(); persistConfig(); };
   $('#meterSelect').onchange = event => { beats = Number(event.target.value); resetMetro(); persistConfig(); };

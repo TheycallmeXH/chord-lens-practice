@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, ipcMain, dialog, Menu, screen, nativeTheme, shell } = require('electron');
+const { app, BrowserWindow, session, ipcMain, dialog, Menu, screen, nativeTheme, shell, protocol, net } = require('electron');
 const {metadata,readLicense} = require('./about.cjs');
 const themes = require('./themes.js');
 const {createSoundfontStore} = require('./soundfont.cjs');
@@ -7,6 +7,7 @@ const { writeFile } = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
 
 const testMode = process.argv.includes('--practice-test');
+protocol.registerSchemesAsPrivileged([{scheme:'piano',privileges:{standard:true,secure:true,supportFetchAPI:true,corsEnabled:true}}]);
 app.commandLine.appendSwitch('autoplay-policy','no-user-gesture-required');
 if (testMode) app.setPath('userData', join(__dirname, '.test-profile'));
 app.setName('和弦镜练琴版');
@@ -60,13 +61,18 @@ if (ownsWindow) app.whenReady().then(() => {
   });
   window.once('ready-to-show', () => { if (!testMode) window.show(); });
   const soundfont=createSoundfontStore(join(__dirname,'..'),app.getPath('userData'));
+  protocol.handle('piano',async request=>{
+    if(request.url!=='piano://soundfont/current' || request.method!=='GET') return new Response(null,{status:404});
+    const response=await net.fetch(await soundfont.url());
+    return new Response(response.body,{status:response.status,headers:{'Access-Control-Allow-Origin':'*','Cache-Control':'no-store'}});
+  });
   ipcMain.handle('practice:soundfont-info',event=>{
     if(event.sender!==window.webContents) return null;
     return soundfont.info();
   });
-  ipcMain.handle('practice:soundfont-load',event=>{
+  ipcMain.handle('practice:soundfont-url',event=>{
     if(event.sender!==window.webContents) throw new Error('无效的音色请求');
-    return soundfont.load();
+    return 'piano://soundfont/current';
   });
   ipcMain.handle('practice:soundfont-choose',async event=>{
     if(event.sender!==window.webContents) return null;
@@ -77,7 +83,7 @@ if (ownsWindow) app.whenReady().then(() => {
     return soundfont.choose(result.filePaths[0]);
   });
   ipcMain.handle('practice:theme', (event, id) => {
-    const theme = themes.find(id);
+    const theme = typeof id==='string' ? themes.find(id) : themes.resolve(id);
     if (event.sender !== window.webContents || !theme) return false;
     nativeTheme.themeSource = theme.light ? 'light' : 'dark';
     window.setBackgroundColor(theme.background);
